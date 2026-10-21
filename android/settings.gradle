@@ -1,4 +1,4 @@
-﻿pluginManagement {
+pluginManagement {
     def flutterSdkPath = {
         def properties = new Properties()
         def propertiesFile = new File(rootProject.projectDir, "local.properties")
