@@ -21,7 +21,7 @@ jobs:
         with:
           channel: 'stable'
 
-      # Erstellt das komplette, fehlerfreie Android-Gerüst automatisch in der Cloud
+      # Erstellt das Projektgerüst in der Cloud
       - name: Recreate Flutter Project Structure
         run: |
           mkdir temp_app
@@ -30,6 +30,12 @@ jobs:
           cp -r garantieheld/android ../
           cd ..
           rm -rf temp_app
+
+      # Aktiviert Core Library Desugaring für flutter_local_notifications
+      - name: Enable Core Library Desugaring
+        run: |
+          sed -i '/compileOptions {/a \        coreLibraryDesugaringEnabled true' android/app/build.gradle
+          sed -i '/dependencies {/a \    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"' android/app/build.gradle
 
       - name: Install Dependencies
         run: flutter pub get
