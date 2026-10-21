@@ -21,17 +21,11 @@ jobs:
         with:
           channel: 'stable'
 
-      # Erstellt das Projektgerüst in der Cloud
-      - name: Recreate Flutter Project Structure
-        run: |
-          mkdir temp_app
-          cd temp_app
-          flutter create --org com.example garantieheld
-          cp -r garantieheld/android ../
-          cd ..
-          rm -rf temp_app
+      # Erstellt die Android-Ordnerstruktur sauber direkt im Hauptverzeichnis
+      - name: Recreate Android Project Structure
+        run: flutter create . --org com.example --project-name garantieheld
 
-      # Aktiviert Core Library Desugaring für flutter_local_notifications
+      # Aktiviert Core Library Desugaring direkt in android/app/build.gradle
       - name: Enable Core Library Desugaring
         run: |
           sed -i '/compileOptions {/a \        coreLibraryDesugaringEnabled true' android/app/build.gradle
