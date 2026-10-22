@@ -21,17 +21,45 @@ jobs:
         with:
           channel: 'stable'
 
-      # Erstellt die Android-Struktur im Alt-Format (.gradle)
+      # Generate the Android project structure.
       - name: Recreate Android Project
         run: flutter create . --org com.example --project-name garantieheld --android-language java
 
-      # Fügt Desugaring ein (funktioniert nun garantiert)
+      # Required by flutter_local_notifications on Android.
       - name: Enable Core Library Desugaring
         run: |
-          if [ -f "android/app/build.gradle" ]; then
-            sed -i '/compileOptions {/a \        coreLibraryDesugaringEnabled true' android/app/build.gradle
-            echo 'dependencies { coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4" }' >> android/app/build.gradle
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          groovy = Path("android/app/build.gradle")
+          kotlin = Path("android/app/build.gradle.kts")
+          gradle_file = kotlin if kotlin.exists() else groovy
+          if not gradle_file.exists():
+              raise SystemExit("Android app Gradle build file was not generated")
+
+          is_kotlin = gradle_file.suffix == ".kts"
+          text = gradle_file.read_text()
+          if "isCoreLibraryDesugaringEnabled" not in text and "coreLibraryDesugaringEnabled" not in text:
+              setting = "isCoreLibraryDesugaringEnabled = true" if is_kotlin else "coreLibraryDesugaringEnabled true"
+              pattern = r"(?m)^(\s*)compileOptions\s*\{\s*$"
+              text, count = re.subn(pattern, lambda match: f"{match.group(0)}\n{match.group(1)}    {setting}", text, count=1)
+              if count != 1:
+                  raise SystemExit("Could not find compileOptions block in Android app Gradle file")
+
+          if "coreLibraryDesugaring(" not in text and "coreLibraryDesugaring \"" not in text:
+              dependency = (
+                  'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")'
+                  if is_kotlin else
+                  'coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"'
+              )
+              pattern = r"(?m)^(\s*)dependencies\s*\{\s*$"
+              text, count = re.subn(pattern, lambda match: f"{match.group(0)}\n{match.group(1)}    {dependency}", text, count=1)
+              if count != 1:
+                  raise SystemExit("Could not find dependencies block in Android app Gradle file")
+
+          gradle_file.write_text(text)
+          PY
 
       - name: Install Dependencies
         run: flutter pub get
