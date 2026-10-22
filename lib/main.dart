@@ -89,7 +89,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _addWarranty() async {
-    final scan = await Navigator.of(context).push<ReceiptScanResult>(
+    final scan = await Navigator.of(context).push<ReceiptOcrResult>(
       MaterialPageRoute(builder: (_) => const ReceiptScannerScreen()),
     );
     if (!mounted || scan == null) return;

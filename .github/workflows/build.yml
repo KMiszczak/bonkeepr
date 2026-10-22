@@ -23,7 +23,15 @@ jobs:
 
       # Generate the Android project structure.
       - name: Recreate Android Project
-        run: flutter create . --org com.example --project-name garantieheld --android-language java
+        run: |
+          flutter create . --org com.example --project-name garantieheld --android-language java
+          python3 - <<'PY'
+          from pathlib import Path
+
+          generated_test = Path("test/widget_test.dart")
+          if generated_test.exists() and "MyApp" in generated_test.read_text():
+              generated_test.unlink()
+          PY
 
       # Required by flutter_local_notifications on Android.
       - name: Enable Core Library Desugaring
