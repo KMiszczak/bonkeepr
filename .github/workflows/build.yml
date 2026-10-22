@@ -55,8 +55,8 @@ jobs:
               )
               pattern = r"(?m)^(\s*)dependencies\s*\{\s*$"
               text, count = re.subn(pattern, lambda match: f"{match.group(0)}\n{match.group(1)}    {dependency}", text, count=1)
-              if count != 1:
-                  raise SystemExit("Could not find dependencies block in Android app Gradle file")
+              if count == 0:
+                  text = f"{text.rstrip()}\n\ndependencies {{\n    {dependency}\n}}\n"
 
           gradle_file.write_text(text)
           PY
