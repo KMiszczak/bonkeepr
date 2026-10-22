@@ -498,6 +498,7 @@ class _WarrantyFormDialogState extends State<WarrantyFormDialog> {
   final _priceController = TextEditingController();
   int _warrantyMonths = 24;
   Category _category = Category.elektronik;
+  DateTime _purchaseDate = DateTime.now();
 
   @override
   void initState() {
@@ -520,7 +521,7 @@ class _WarrantyFormDialogState extends State<WarrantyFormDialog> {
       title: _titleController.text.trim(),
       storeName: _storeController.text.trim(),
       price: double.parse(_priceController.text.trim().replaceAll(',', '.')),
-      purchaseDate: DateTime.now(),
+      purchaseDate: _purchaseDate,
       warrantyMonths: _warrantyMonths,
       category: _category,
       imagePath: '',
@@ -563,9 +564,32 @@ class _WarrantyFormDialogState extends State<WarrantyFormDialog> {
                   final parsed = double.tryParse(
                     (value ?? '').trim().replaceAll(',', '.'),
                   );
-                  return parsed == null || parsed < 0
+                  return parsed == null || !parsed.isFinite || parsed < 0
                       ? 'Bitte einen gültigen Preis eingeben'
                       : null;
+                },
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                tileColor: GarantieHeldApp.background,
+                leading: const Icon(Icons.calendar_month_rounded),
+                title: const Text('Kaufdatum'),
+                subtitle: Text(DateFormat('dd.MM.yyyy').format(_purchaseDate)),
+                trailing: const Icon(Icons.edit_calendar_outlined),
+                onTap: () async {
+                  final selected = await showDatePicker(
+                    context: context,
+                    initialDate: _purchaseDate,
+                    firstDate: DateTime(1990),
+                    lastDate: DateTime.now(),
+                  );
+                  if (selected != null) {
+                    setState(() => _purchaseDate = selected);
+                  }
                 },
               ),
               const SizedBox(height: 12),

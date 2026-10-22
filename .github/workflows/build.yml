@@ -65,10 +65,10 @@ jobs:
                   text = f"{text.rstrip()}\n\ndependencies {{\n    {dependency}\n}}\n"
 
           mlkit_artifacts = [
-              "com.google.mlkit:text-recognition-chinese:16.0.0",
-              "com.google.mlkit:text-recognition-devanagari:16.0.0",
-              "com.google.mlkit:text-recognition-japanese:16.0.0",
-              "com.google.mlkit:text-recognition-korean:16.0.0",
+              "com.google.mlkit:text-recognition-chinese:16.0.1",
+              "com.google.mlkit:text-recognition-devanagari:16.0.1",
+              "com.google.mlkit:text-recognition-japanese:16.0.1",
+              "com.google.mlkit:text-recognition-korean:16.0.1",
           ]
           for artifact in mlkit_artifacts:
               if artifact in text:
