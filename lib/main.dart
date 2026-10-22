@@ -1,10 +1,16 @@
-﻿import 'package:camera/camera.dart';
+﻿import 'dart:io';
+
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'database_helper.dart';
+import 'receipt_ocr_parser.dart';
 import 'warranty_model.dart';
 
 Future<void> main() async {
@@ -83,17 +89,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _addWarranty() async {
-    final text = await Navigator.of(context).push<String>(
+    final scan = await Navigator.of(context).push<ReceiptScanResult>(
       MaterialPageRoute(builder: (_) => const ReceiptScannerScreen()),
     );
-    if (!mounted || text == null) return;
-    final firstLine = text
-        ?.split('\n')
-        .map((line) => line.trim())
-        .firstWhere((line) => line.isNotEmpty, orElse: () => '');
+    if (!mounted || scan == null) return;
     final warranty = await showDialog<Warranty>(
       context: context,
-      builder: (_) => WarrantyFormDialog(initialTitle: firstLine ?? ''),
+      builder: (_) => WarrantyFormDialog(scanResult: scan),
     );
     if (warranty == null || !mounted) return;
     await DatabaseHelper.instance.insertWarranty(warranty);
@@ -483,9 +485,9 @@ class _LoadError extends StatelessWidget {
 }
 
 class WarrantyFormDialog extends StatefulWidget {
-  const WarrantyFormDialog({super.key, this.initialTitle = ''});
+  const WarrantyFormDialog({super.key, required this.scanResult});
 
-  final String initialTitle;
+  final ReceiptOcrResult scanResult;
 
   @override
   State<WarrantyFormDialog> createState() => _WarrantyFormDialogState();
@@ -498,12 +500,19 @@ class _WarrantyFormDialogState extends State<WarrantyFormDialog> {
   final _priceController = TextEditingController();
   int _warrantyMonths = 24;
   Category _category = Category.elektronik;
-  DateTime _purchaseDate = DateTime.now();
+  DateTime? _purchaseDate;
+  bool _dateError = false;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.initialTitle);
+    final result = widget.scanResult;
+    _titleController = TextEditingController(text: result.productTitle);
+    _storeController.text = result.storeName;
+    _priceController.text = result.totalAmount == null
+        ? ''
+        : result.totalAmount!.toStringAsFixed(2).replaceAll('.', ',');
+    _purchaseDate = result.purchaseDate;
   }
 
   @override
@@ -516,15 +525,19 @@ class _WarrantyFormDialogState extends State<WarrantyFormDialog> {
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
+    if (_purchaseDate == null) {
+      setState(() => _dateError = true);
+      return;
+    }
     final warranty = Warranty(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       storeName: _storeController.text.trim(),
       price: double.parse(_priceController.text.trim().replaceAll(',', '.')),
-      purchaseDate: _purchaseDate,
+      purchaseDate: _purchaseDate!,
       warrantyMonths: _warrantyMonths,
       category: _category,
-      imagePath: '',
+      imagePath: widget.scanResult.imagePath,
     );
     Navigator.of(context).pop(warranty);
   }
@@ -533,16 +546,42 @@ class _WarrantyFormDialogState extends State<WarrantyFormDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: GarantieHeldApp.surface,
-      title: const Text('Garantie hinzufügen'),
+      title: const Text('Garantie erfassen'),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (widget.scanResult.imagePath.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(
+                    File(widget.scanResult.imagePath),
+                    height: 116,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 72,
+                      alignment: Alignment.center,
+                      color: GarantieHeldApp.background,
+                      child: const Text('Kassenbon-Bild nicht verfügbar'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (widget.scanResult.totalAmount == null ||
+                  widget.scanResult.purchaseDate == null) ...[
+                const Text(
+                  'Nicht alles wurde erkannt. Ergänze die markierten Angaben.',
+                  style: TextStyle(color: Color(0xFFFBBF24), fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+              ],
               TextFormField(
                 controller: _titleController,
-                autofocus: widget.initialTitle.isEmpty,
+                autofocus: _titleController.text.isEmpty,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(labelText: 'Produktname *'),
                 validator: (value) => value == null || value.trim().isEmpty
@@ -578,20 +617,39 @@ class _WarrantyFormDialogState extends State<WarrantyFormDialog> {
                 tileColor: GarantieHeldApp.background,
                 leading: const Icon(Icons.calendar_month_rounded),
                 title: const Text('Kaufdatum'),
-                subtitle: Text(DateFormat('dd.MM.yyyy').format(_purchaseDate)),
+                subtitle: Text(
+                  _purchaseDate == null
+                      ? 'Datum auswählen *'
+                      : DateFormat('dd.MM.yyyy').format(_purchaseDate!),
+                  style: _dateError ? const TextStyle(color: Color(0xFFF87171)) : null,
+                ),
                 trailing: const Icon(Icons.edit_calendar_outlined),
                 onTap: () async {
                   final selected = await showDatePicker(
                     context: context,
-                    initialDate: _purchaseDate,
+                    initialDate: _purchaseDate ?? DateTime.now(),
                     firstDate: DateTime(1990),
                     lastDate: DateTime.now(),
                   );
                   if (selected != null) {
-                    setState(() => _purchaseDate = selected);
+                    setState(() {
+                      _purchaseDate = selected;
+                      _dateError = false;
+                    });
                   }
                 },
               ),
+              if (_dateError)
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 12, top: 4),
+                    child: Text(
+                      'Bitte Kaufdatum auswählen',
+                      style: TextStyle(color: Color(0xFFF87171), fontSize: 12),
+                    ),
+                  ),
+                ),
               const SizedBox(height: 12),
               DropdownButtonFormField<Category>(
                 value: _category,
@@ -655,6 +713,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   CameraController? _controller;
   String? _error;
   bool _busy = false;
+  bool _canOpenSettings = false;
 
   @override
   void initState() {
@@ -664,6 +723,22 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
 
   Future<void> _initializeCamera() async {
     try {
+      var permission = await Permission.camera.status;
+      if (!permission.isGranted) {
+        permission = await Permission.camera.request();
+      }
+      if (!permission.isGranted) {
+        if (mounted) {
+          setState(() {
+            _canOpenSettings = permission.isPermanentlyDenied || permission.isRestricted;
+            _error = _canOpenSettings
+                ? 'Kamerazugriff ist gesperrt. Erlaube ihn in den App-Einstellungen.'
+                : 'Für den Bon-Scan wird Kamerazugriff benötigt.';
+          });
+        }
+        return;
+      }
+
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         throw CameraException('NoCamera', 'Keine Kamera gefunden.');
@@ -696,15 +771,44 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     setState(() => _busy = true);
     try {
       final image = await controller.takePicture();
-      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      var imagePath = image.path;
       try {
-        final result = await recognizer.processImage(
-          InputImage.fromFilePath(image.path),
-        );
-        if (mounted) Navigator.of(context).pop(result.text);
-      } finally {
-        await recognizer.close();
+        imagePath = await _persistReceiptImage(image.path);
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Das Foto bleibt vorerst nur temporär verfügbar.'),
+            ),
+          );
+        }
       }
+
+      ReceiptOcrResult scanResult;
+      try {
+        final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+        try {
+          final recognized = await recognizer.processImage(
+            InputImage.fromFilePath(image.path),
+          );
+          scanResult = ReceiptOcrParser.parse(
+            recognized.text,
+            imagePath: imagePath,
+          );
+        } finally {
+          await recognizer.close();
+        }
+      } catch (_) {
+        scanResult = ReceiptOcrParser.parse('', imagePath: imagePath);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Texterkennung nicht verfügbar. Du kannst alles manuell eingeben.'),
+            ),
+          );
+        }
+      }
+      if (mounted) Navigator.of(context).pop(scanResult);
     } on CameraException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -720,6 +824,20 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<String> _persistReceiptImage(String sourcePath) async {
+    final documents = await getApplicationDocumentsDirectory();
+    final receiptsDirectory = Directory(path.join(documents.path, 'receipts'));
+    await receiptsDirectory.create(recursive: true);
+    final extension = path.extension(sourcePath).isEmpty
+        ? '.jpg'
+        : path.extension(sourcePath);
+    final destination = path.join(
+      receiptsDirectory.path,
+      'receipt_${DateTime.now().microsecondsSinceEpoch}$extension',
+    );
+    return (await File(sourcePath).copy(destination)).path;
   }
 
   @override
@@ -752,9 +870,19 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                     const Text('Du kannst die Garantie anschließend manuell erfassen.'),
                     const SizedBox(height: 18),
                     FilledButton(
-                      onPressed: () => Navigator.of(context).pop(''),
+                      onPressed: () => Navigator.of(context).pop(
+                        ReceiptOcrParser.parse(''),
+                      ),
                       child: const Text('Manuell eingeben'),
                     ),
+                    if (_canOpenSettings) ...[
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: openAppSettings,
+                        icon: const Icon(Icons.settings_outlined),
+                        label: const Text('Einstellungen öffnen'),
+                      ),
+                    ],
                   ],
                 ),
               ),

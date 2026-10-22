@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1170" height="2532" viewBox="0 0 1170 2532" role="img" aria-labelledby="title desc">
+  <title id="title">GarantieHeld Dashboard – UI-Vorschau</title>
+  <desc id="desc">Dark-mode Dashboard einer lokalen Garantie-App mit geschütztem Gesamtwert, aktiven Garantien und Bon-scannen-Schaltfläche.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#111c32"/><stop offset="1" stop-color="#0b1324"/></linearGradient>
+    <linearGradient id="emerald" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#059669"/><stop offset="1" stop-color="#047857"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000" flood-opacity=".28"/></filter>
+    <style>
+      .sans{font-family:Inter,Roboto,"Segoe UI",Arial,sans-serif}
+      .white{fill:#f8fafc}
+      .muted{fill:#94a3b8}
+    </style>
+  </defs>
+  <rect width="1170" height="2532" rx="76" fill="#050b16"/>
+  <rect x="24" y="24" width="1122" height="2484" rx="62" fill="url(#page)"/>
+  <rect x="438" y="36" width="294" height="48" rx="24" fill="#050b16"/>
+
+  <!-- Status bar -->
+  <g class="sans white" font-size="30" font-weight="650">
+    <text x="76" y="126">9:41</text>
+    <path d="M946 105h9v18h-9zm16-8h9v26h-9zm16-9h9v35h-9z" fill="#f8fafc"/>
+    <path d="M1003 111q25-27 50 0l-25 27z" fill="#f8fafc"/>
+    <rect x="1072" y="99" width="42" height="25" rx="6" fill="none" stroke="#f8fafc" stroke-width="4"/>
+    <rect x="1116" y="106" width="6" height="11" rx="3" fill="#f8fafc"/>
+    <rect x="1077" y="104" width="29" height="15" rx="3" fill="#34d399"/>
+  </g>
+
+  <!-- App header -->
+  <g class="sans white">
+    <path d="M92 211l35-20 35 20v43c0 29-19 49-35 57-16-8-35-28-35-57z" fill="none" stroke="#10b981" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M110 247l12 12 25-29" fill="none" stroke="#10b981" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="184" y="251" font-size="48" font-weight="750" letter-spacing="-1">GarantieHeld</text>
+    <circle cx="1058" cy="236" r="35" fill="#1e293b"/>
+    <path d="M1045 236a13 13 0 1 1 26 0c0 16 7 17 7 23h-40c0-6 7-7 7-23zm10 31h7" fill="none" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="1082" cy="212" r="8" fill="#10b981"/>
+  </g>
+
+  <!-- Protected total card -->
+  <g filter="url(#shadow)">
+    <rect x="68" y="322" width="1034" height="446" rx="38" fill="url(#emerald)"/>
+  </g>
+  <g class="sans white">
+    <path d="M112 382l18-10 18 10v21c0 15-10 25-18 29-8-4-18-14-18-29z" fill="none" stroke="#d1fae5" stroke-width="4"/>
+    <text x="176" y="403" font-size="27" font-weight="700" letter-spacing="3" fill="#d1fae5">GESAMTWERT GESCHÜTZT</text>
+    <text x="112" y="516" font-size="88" font-weight="800" letter-spacing="-3">1.548,90 €</text>
+    <text x="114" y="568" font-size="29" fill="#d1fae5">Wert deiner aktiven Garantien</text>
+    <rect x="112" y="633" width="222" height="74" rx="37" fill="#003d2d" fill-opacity=".34"/>
+    <path d="M141 658l13-7 13 7v14c0 10-7 17-13 20-6-3-13-10-13-20z" fill="none" stroke="#ecfdf5" stroke-width="3"/>
+    <text x="181" y="680" font-size="25" font-weight="650">8 aktiv</text>
+    <rect x="352" y="633" width="356" height="74" rx="37" fill="#003d2d" fill-opacity=".34"/>
+    <circle cx="392" cy="669" r="13" fill="none" stroke="#ecfdf5" stroke-width="3"/>
+    <path d="M392 660v10l7 5" fill="none" stroke="#ecfdf5" stroke-width="3" stroke-linecap="round"/>
+    <text x="420" y="680" font-size="25" font-weight="650">2 laufen bald ab</text>
+  </g>
+
+  <!-- List heading -->
+  <g class="sans white">
+    <text x="72" y="871" font-size="45" font-weight="750" letter-spacing="-1">Deine Garantien</text>
+    <text x="920" y="869" font-size="25" class="muted">8 gesamt</text>
+  </g>
+
+  <!-- Warranty card 1 -->
+  <g>
+    <rect x="68" y="925" width="1034" height="258" rx="30" fill="#1e293b" stroke="#ffffff" stroke-opacity=".035" stroke-width="2"/>
+    <rect x="100" y="974" width="112" height="112" rx="28" fill="#10b981" fill-opacity=".14"/>
+    <rect x="126" y="1005" width="60" height="43" rx="6" fill="none" stroke="#34d399" stroke-width="5"/>
+    <path d="M137 1061h38m-29-13v13m20-13v13m-30-54 20-15 20 15" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <g class="sans white">
+      <text x="246" y="991" font-size="33" font-weight="700">Kaffeevollautomat</text>
+      <text x="246" y="1037" font-size="24" class="muted">MediaMarkt · 12.03.2025</text>
+      <text x="246" y="1117" font-size="30" font-weight="700">799,00 €</text>
+      <rect x="415" y="1080" width="180" height="49" rx="24" fill="#10b981" fill-opacity=".14"/>
+      <text x="438" y="1113" font-size="21" font-weight="700" fill="#34d399">Noch 486 Tage</text>
+    </g>
+    <path d="M1046 1035l11 11 22-24" fill="none" stroke="#64748b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Warranty card 2 -->
+  <g>
+    <rect x="68" y="1205" width="1034" height="258" rx="30" fill="#1e293b" stroke="#ffffff" stroke-opacity=".035" stroke-width="2"/>
+    <rect x="100" y="1254" width="112" height="112" rx="28" fill="#10b981" fill-opacity=".14"/>
+    <rect x="128" y="1282" width="56" height="56" rx="7" fill="none" stroke="#34d399" stroke-width="5"/>
+    <path d="M138 1296h36m-36 14h26m-26 14h18" stroke="#34d399" stroke-width="4" stroke-linecap="round"/>
+    <g class="sans white">
+      <text x="246" y="1271" font-size="33" font-weight="700">Kopfhörer Pro</text>
+      <text x="246" y="1317" font-size="24" class="muted">Apple Store · 04.10.2024</text>
+      <text x="246" y="1397" font-size="30" font-weight="700">249,90 €</text>
+      <rect x="415" y="1360" width="164" height="49" rx="24" fill="#f59e0b" fill-opacity=".13"/>
+      <text x="438" y="1393" font-size="21" font-weight="700" fill="#fbbf24">Noch 18 Tage</text>
+    </g>
+    <circle cx="1058" cy="1314" r="7" fill="#fbbf24"/>
+  </g>
+
+  <!-- Warranty card 3 -->
+  <g>
+    <rect x="68" y="1485" width="1034" height="258" rx="30" fill="#1e293b" stroke="#ffffff" stroke-opacity=".035" stroke-width="2"/>
+    <rect x="100" y="1534" width="112" height="112" rx="28" fill="#10b981" fill-opacity=".14"/>
+    <path d="M127 1611v-39l29-22 29 22v39h-20v-26h-18v26z" fill="none" stroke="#34d399" stroke-width="5" stroke-linejoin="round"/>
+    <g class="sans white">
+      <text x="246" y="1551" font-size="33" font-weight="700">Akku-Bohrschrauber</text>
+      <text x="246" y="1597" font-size="24" class="muted">Bauhaus · 28.08.2023</text>
+      <text x="246" y="1677" font-size="30" font-weight="700">179,00 €</text>
+      <rect x="415" y="1640" width="164" height="49" rx="24" fill="#10b981" fill-opacity=".14"/>
+      <text x="438" y="1673" font-size="21" font-weight="700" fill="#34d399">Noch 308 Tage</text>
+    </g>
+    <path d="M1046 1595l11 11 22-24" fill="none" stroke="#64748b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Lower list hint -->
+  <text x="585" y="1821" text-anchor="middle" class="sans muted" font-size="23">Alle Käufe bleiben sicher auf deinem Gerät.</text>
+
+  <!-- Floating action button -->
+  <g filter="url(#shadow)">
+    <rect x="600" y="2142" width="502" height="112" rx="56" fill="#10b981"/>
+  </g>
+  <g class="sans" fill="#052e23">
+    <path d="M661 2180h40l11 12v39h-51z" fill="none" stroke="#052e23" stroke-width="5" stroke-linejoin="round"/>
+    <circle cx="681" cy="2206" r="9" fill="none" stroke="#052e23" stroke-width="5"/>
+    <path d="M714 2172v15m-8-8h16" stroke="#052e23" stroke-width="5" stroke-linecap="round"/>
+    <text x="737" y="2212" font-size="30" font-weight="750">Bon scannen</text>
+  </g>
+
+  <!-- Home indicator -->
+  <rect x="435" y="2449" width="300" height="10" rx="5" fill="#f8fafc" fill-opacity=".82"/>
+</svg>
+
