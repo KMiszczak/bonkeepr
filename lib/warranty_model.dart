@@ -1,16 +1,14 @@
-﻿import 'dart:convert';
-
-enum Category { elektronik, haushalt, moebel, werkzeug, kleidung, sonstiges }
+﻿enum Category {
+  elektronik,
+  haushalt,
+  moebel,
+  werkzeug,
+  kleidung,
+  sonstiges,
+}
 
 class Warranty {
-  final String id, title, storeName, imagePath;
-  final double price;
-  final DateTime purchaseDate;
-  final int warrantyMonths, reminderDaysBefore;
-  final Category category;
-  final String? serialNumber, notes;
-
-  Warranty({
+  const Warranty({
     required this.id,
     required this.title,
     required this.storeName,
@@ -24,36 +22,74 @@ class Warranty {
     this.reminderDaysBefore = 30,
   });
 
-  DateTime get expirationDate => DateTime(purchaseDate.year, purchaseDate.month + warrantyMonths, purchaseDate.day);
-  int get remainingDays => DateTime(expirationDate.year, expirationDate.month, expirationDate.day).difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays;
+  final String id;
+  final String title;
+  final String storeName;
+  final double price;
+  final DateTime purchaseDate;
+  final int warrantyMonths;
+  final Category category;
+  final String imagePath;
+  final String? serialNumber;
+  final String? notes;
+  final int reminderDaysBefore;
+
+  /// Adds calendar months and clamps to the last valid day of the target month.
+  DateTime get expirationDate {
+    final monthIndex = purchaseDate.year * 12 + purchaseDate.month - 1 + warrantyMonths;
+    final year = monthIndex ~/ 12;
+    final month = monthIndex % 12 + 1;
+    final lastDay = DateTime(year, month + 1, 0).day;
+    return DateTime(year, month, purchaseDate.day.clamp(1, lastDay).toInt());
+  }
+
+  int get remainingDays {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final expirationDateOnly = DateTime(
+      expirationDate.year,
+      expirationDate.month,
+      expirationDate.day,
+    );
+    return expirationDateOnly.difference(todayDate).inDays;
+  }
+
   bool get isExpired => remainingDays < 0;
-  bool get isExpiringSoon => remainingDays >= 0 && remainingDays <= 30;
 
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'title': title,
-    'storeName': storeName,
-    'price': price,
-    'purchaseDate': purchaseDate.toIso8601String(),
-    'warrantyMonths': warrantyMonths,
-    'category': category.name,
-    'imagePath': imagePath,
-    'serialNumber': serialNumber,
-    'notes': notes,
-    'reminderDaysBefore': reminderDaysBefore,
-  };
+  /// A warranty is expiring soon if it expires today or within the next 29 days.
+  bool get isExpiringSoon => remainingDays >= 0 && remainingDays < 30;
 
-  factory Warranty.fromMap(Map<String, dynamic> map) => Warranty(
-    id: map['id'],
-    title: map['title'],
-    storeName: map['storeName'],
-    price: (map['price'] as num).toDouble(),
-    purchaseDate: DateTime.parse(map['purchaseDate']),
-    warrantyMonths: map['warrantyMonths'],
-    category: Category.values.firstWhere((e) => e.name == map['category'], orElse: () => Category.sonstiges),
-    imagePath: map['imagePath'],
-    serialNumber: map['serialNumber'],
-    notes: map['notes'],
-    reminderDaysBefore: map['reminderDaysBefore'] ?? 30,
-  );
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'title': title,
+        'storeName': storeName,
+        'price': price,
+        'purchaseDate': purchaseDate.toIso8601String(),
+        'warrantyMonths': warrantyMonths,
+        'category': category.name,
+        'imagePath': imagePath,
+        'serialNumber': serialNumber,
+        'notes': notes,
+        'reminderDaysBefore': reminderDaysBefore,
+      };
+
+  factory Warranty.fromMap(Map<String, Object?> map) {
+    final categoryName = map['category'] as String?;
+    return Warranty(
+      id: map['id'] as String,
+      title: map['title'] as String,
+      storeName: map['storeName'] as String? ?? '',
+      price: (map['price'] as num?)?.toDouble() ?? 0,
+      purchaseDate: DateTime.parse(map['purchaseDate'] as String),
+      warrantyMonths: map['warrantyMonths'] as int? ?? 24,
+      category: Category.values.firstWhere(
+        (value) => value.name == categoryName,
+        orElse: () => Category.sonstiges,
+      ),
+      imagePath: map['imagePath'] as String? ?? '',
+      serialNumber: map['serialNumber'] as String?,
+      notes: map['notes'] as String?,
+      reminderDaysBefore: map['reminderDaysBefore'] as int? ?? 30,
+    );
+  }
 }

@@ -40,6 +40,12 @@ jobs:
 
           is_kotlin = gradle_file.suffix == ".kts"
           text = gradle_file.read_text()
+          min_sdk_pattern = r"(?m)^(\s*)minSdk(?:Version)?\s*(?:=|\s)\s*.*$"
+          min_sdk_value = "minSdk = 23"
+          text, min_sdk_count = re.subn(min_sdk_pattern, lambda match: match.group(1) + min_sdk_value, text, count=1)
+          if min_sdk_count == 0:
+              raise SystemExit("Could not find minSdk setting in Android app Gradle file")
+
           if "isCoreLibraryDesugaringEnabled" not in text and "coreLibraryDesugaringEnabled" not in text:
               setting = "isCoreLibraryDesugaringEnabled = true" if is_kotlin else "coreLibraryDesugaringEnabled true"
               pattern = r"(?m)^(\s*)compileOptions\s*\{\s*$"
@@ -58,7 +64,39 @@ jobs:
               if count == 0:
                   text = f"{text.rstrip()}\n\ndependencies {{\n    {dependency}\n}}\n"
 
+          mlkit_artifacts = [
+              "com.google.mlkit:text-recognition-chinese:16.0.0",
+              "com.google.mlkit:text-recognition-devanagari:16.0.0",
+              "com.google.mlkit:text-recognition-japanese:16.0.0",
+              "com.google.mlkit:text-recognition-korean:16.0.0",
+          ]
+          for artifact in mlkit_artifacts:
+              if artifact in text:
+                  continue
+              dependency = f'implementation("{artifact}")' if is_kotlin else f"implementation '{artifact}'"
+              pattern = r"(?m)^(\s*)dependencies\s*\{\s*$"
+              text, count = re.subn(
+                  pattern,
+                  lambda match: f"{match.group(0)}\n{match.group(1)}    {dependency}",
+                  text,
+                  count=1,
+              )
+              if count != 1:
+                  raise SystemExit("Could not add ML Kit OCR artifacts to Android app Gradle file")
+
           gradle_file.write_text(text)
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          manifest_text = manifest.read_text()
+          camera_permission = 'android.permission.CAMERA'
+          if camera_permission not in manifest_text:
+              manifest_text = re.sub(
+                  r"(<manifest\b[^>]*>)",
+                  r'\1\n    <uses-permission android:name="android.permission.CAMERA" />',
+                  manifest_text,
+                  count=1,
+              )
+              manifest.write_text(manifest_text)
           PY
 
       - name: Install Dependencies

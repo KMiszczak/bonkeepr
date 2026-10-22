@@ -1,20 +1,74 @@
-﻿import 'package:path/path.dart';
+﻿import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
+
 import 'warranty_model.dart';
 
 class DatabaseHelper {
-  static final DatabaseHelper instance = DatabaseHelper._init();
-  static Database? _database;
-  DatabaseHelper._init();
+  DatabaseHelper._();
 
-  Future<Database> get database async => _database ??= await openDatabase(
-    join(await getDatabasesPath(), 'garantieheld.db'),
-    version: 1,
-    onCreate: (db, v) => db.execute(
-      'CREATE TABLE warranties (id TEXT PRIMARY KEY, title TEXT, storeName TEXT, price REAL, purchaseDate TEXT, warrantyMonths INTEGER, category TEXT, imagePath TEXT, serialNumber TEXT, notes TEXT, reminderDaysBefore INTEGER)'
-    ),
-  );
+  static final DatabaseHelper instance = DatabaseHelper._();
+  static const _databaseName = 'garantieheld.db';
+  static const _tableName = 'warranties';
 
-  Future<int> insertWarranty(Warranty w) async => (await database).insert('warranties', w.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  Future<List<Warranty>> getAllWarranties() async => (await (await database).query('warranties', orderBy: 'purchaseDate DESC')).map((j) => Warranty.fromMap(j)).toList();
+  Database? _database;
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+
+    final databasesPath = await getDatabasesPath();
+    final database = await openDatabase(
+      path.join(databasesPath, _databaseName),
+      version: 1,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE $_tableName (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            storeName TEXT NOT NULL,
+            price REAL NOT NULL,
+            purchaseDate TEXT NOT NULL,
+            warrantyMonths INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            imagePath TEXT NOT NULL,
+            serialNumber TEXT,
+            notes TEXT,
+            reminderDaysBefore INTEGER NOT NULL DEFAULT 30
+          )
+        ''');
+      },
+    );
+    _database = database;
+    return database;
+  }
+
+  Future<int> insertWarranty(Warranty warranty) async {
+    return (await database).insert(
+      _tableName,
+      warranty.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<Warranty>> getAllWarranties() async {
+    final rows = await (await database).query(
+      _tableName,
+      orderBy: 'purchaseDate DESC',
+    );
+    return rows.map(Warranty.fromMap).toList(growable: false);
+  }
+
+  Future<int> deleteWarranty(String id) async {
+    return (await database).delete(
+      _tableName,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> close() async {
+    final currentDatabase = _database;
+    if (currentDatabase == null) return;
+    await currentDatabase.close();
+    _database = null;
+  }
 }
