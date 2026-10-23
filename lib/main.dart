@@ -100,8 +100,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<List<Warranty>> _warrantiesFuture;
   final _currency = NumberFormat.currency(locale: 'de_DE', symbol: '€');
   final _date = DateFormat('dd.MM.yyyy', 'de_DE');
+  final _searchController = TextEditingController();
   final Set<String> _deletingWarrantyIds = {};
   final Set<String> _hiddenWarrantyIds = {};
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -114,6 +116,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _warrantiesFuture = DatabaseHelper.instance.getAllWarranties();
     });
     await _warrantiesFuture;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _addWarranty() async {
@@ -238,13 +246,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: Scaffold(
       appBar: AppBar(
         title: const Row(
           children: [
             Icon(Icons.shield_outlined, color: GarantieHeldApp.emerald),
             SizedBox(width: 10),
-            Text('GarantieHeld', style: TextStyle(fontWeight: FontWeight.w700)),
+            Text('BonKeepr', style: TextStyle(fontWeight: FontWeight.w700)),
           ],
         ),
         actions: [
@@ -255,6 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+      extendBody: true,
       body: FutureBuilder<List<Warranty>>(
         future: _warrantiesFuture,
         builder: (context, snapshot) {
@@ -269,6 +281,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final warranties = (snapshot.data ?? const <Warranty>[])
               .where((item) => !_hiddenWarrantyIds.contains(item.id))
               .toList(growable: false);
+          final query = _searchQuery.trim().toLowerCase();
+          final filteredWarranties = warranties.where((item) {
+            return query.isEmpty ||
+                item.title.toLowerCase().contains(query) ||
+                item.storeName.toLowerCase().contains(query);
+          }).toList(growable: false);
           final active = warranties.where((item) => !item.isExpired).toList();
           final expiring = active.where((item) => item.isExpiringSoon).length;
           final protectedTotal = active.fold<double>(
@@ -282,7 +300,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 150),
                   sliver: SliverList.list(
                     children: [
                       _ProtectedValueCard(
@@ -290,7 +308,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         activeCount: active.length,
                         expiringCount: expiring,
                       ),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _searchController,
+                        onChanged: (value) => setState(() => _searchQuery = value),
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: 'Garantie oder Händler suchen...',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                            valueListenable: _searchController,
+                            builder: (context, value, _) => value.text.isEmpty
+                                ? const SizedBox.shrink()
+                                : IconButton(
+                                    tooltip: 'Suche leeren',
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = '');
+                                    },
+                                    icon: const Icon(Icons.clear_rounded),
+                                  ),
+                          ),
+                          filled: true,
+                          fillColor: GarantieHeldApp.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 15,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: GarantieHeldApp.emerald,
+                              width: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                       Row(
                         children: [
                           const Expanded(
@@ -303,7 +365,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                           Text(
-                            '${warranties.length} gesamt',
+                            query.isEmpty
+                                ? '${warranties.length} gesamt'
+                                : '${filteredWarranties.length} Treffer',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.58),
                               fontSize: 13,
@@ -314,8 +378,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 14),
                       if (warranties.isEmpty)
                         const _EmptyState()
+                      else if (filteredWarranties.isEmpty)
+                        const _SearchEmptyState()
                       else
-                        ...warranties.map((item) {
+                        ...filteredWarranties.map((item) {
                           final isDeleting = _deletingWarrantyIds.contains(item.id);
                           return TweenAnimationBuilder<double>(
                             key: ValueKey(item.id),
@@ -356,16 +422,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         },
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-          child: PrimaryButton(
-            label: 'Bon scannen',
-            icon: Icons.document_scanner_outlined,
-            onPressed: _addWarranty,
+      bottomNavigationBar: Stack(
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          GarantieHeldApp.background.withValues(alpha: 0.82),
+                          GarantieHeldApp.background,
+                        ],
+                        stops: const [0, 0.38, 1],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              child: PrimaryButton(
+                label: 'Bon scannen',
+                icon: Icons.document_scanner_outlined,
+                onPressed: _addWarranty,
+              ),
+            ),
+          ),
+        ],
+      ),
       ),
     );
   }
@@ -955,23 +1049,31 @@ class _WarrantyCard extends StatelessWidget {
   final String purchaseDate;
 
   static const _icons = <Category, IconData>{
-    Category.elektronik: Icons.devices_rounded,
+    Category.elektronik: Icons.devices,
     Category.haushalt: Icons.kitchen_rounded,
-    Category.moebel: Icons.chair_alt_rounded,
+    Category.moebel: Icons.home_max_rounded,
     Category.werkzeug: Icons.handyman_rounded,
     Category.kleidung: Icons.checkroom_rounded,
-    Category.sonstiges: Icons.inventory_2_rounded,
+    Category.sonstiges: Icons.inventory_2_outlined,
   };
 
   @override
   Widget build(BuildContext context) {
     final expired = warranty.isExpired;
-    final statusColor = expired ? const Color(0xFFF87171) : const Color(0xFF34D399);
+    final remainingDays = warranty.remainingDays;
+    final nearingExpiry = !expired && remainingDays < 30;
+    final statusColor = expired
+        ? const Color(0xFFF87171)
+        : nearingExpiry
+            ? const Color(0xFFF97316)
+            : GarantieHeldApp.emerald;
     final status = expired
         ? 'Abgelaufen'
-        : warranty.remainingDays == 0
-            ? 'Noch heute'
-            : 'Noch ${warranty.remainingDays} Tage';
+        : remainingDays == 0
+            ? 'Achtung: Noch heute'
+            : nearingExpiry
+                ? 'Achtung: Noch $remainingDays Tage'
+                : 'Noch $remainingDays Tage';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -985,8 +1087,15 @@ class _WarrantyCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: GarantieHeldApp.emerald.withOpacity(0.12),
+              color: GarantieHeldApp.surface,
               borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: GarantieHeldApp.emerald.withValues(alpha: 0.16),
+                  blurRadius: 14,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
             child: Icon(
               _icons[warranty.category] ?? Icons.inventory_2_rounded,
@@ -1084,6 +1193,29 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+class _SearchEmptyState extends StatelessWidget {
+  const _SearchEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      decoration: BoxDecoration(
+        color: GarantieHeldApp.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.search_off_rounded, size: 34, color: Color(0xFF94A3B8)),
+          SizedBox(height: 10),
+          Text('Keine passende Garantie gefunden.'),
+        ],
+      ),
+    );
+  }
+}
+
 class _LoadError extends StatelessWidget {
   const _LoadError({required this.onRetry});
 
@@ -1125,6 +1257,7 @@ class WarrantyFormPage extends StatefulWidget {
 
 class _WarrantyFormPageState extends State<WarrantyFormPage> {
   final _formKey = GlobalKey<FormState>();
+  final _imagePicker = ImagePicker();
   late final TextEditingController _titleController;
   final _storeController = TextEditingController();
   final _priceController = TextEditingController();
@@ -1136,6 +1269,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   bool _dateError = false;
   bool _isAnalyzing = false;
   bool _analysisRequestInProgress = false;
+  int _analysisGeneration = 0;
   String? _analysisError;
 
   @override
@@ -1163,6 +1297,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   Future<void> _analyzeReceipt() async {
     if (_analysisRequestInProgress) return;
     _analysisRequestInProgress = true;
+    final generation = ++_analysisGeneration;
+    final imagePath = _scanResult.imagePath;
     try {
       if (kDebugMode) {
         debugPrint(
@@ -1171,11 +1307,11 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         );
       }
       final result = await GeminiReceiptAnalyzer.analyzeReceipt(
-        imagePath: _scanResult.imagePath,
+        imagePath: imagePath,
       );
-      if (!mounted) return;
+      if (!mounted || generation != _analysisGeneration) return;
       setState(() {
-        _scanResult = result;
+        _scanResult = result.copyWith(imagePath: _scanResult.imagePath);
         _titleController.text = result.productTitle;
         _storeController.text = result.storeName;
         _priceController.text = result.productPrice == null
@@ -1196,24 +1332,31 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         );
         debugPrintStack(stackTrace: stackTrace);
       }
-      if (!mounted) return;
+      if (!mounted || generation != _analysisGeneration) return;
       setState(() {
         _isAnalyzing = false;
-        _analysisError = !GeminiReceiptAnalyzer.hasApiKey
-            ? 'Gemini-API-Key fehlt. Starte mit --dart-define=GEMINI_API_KEY=…'
-            : GeminiReceiptAnalyzer.isServiceUnavailable(error)
-                ? 'Gemini ist momentan stark ausgelastet (HTTP 503).'
-                : error is TimeoutException
-                    ? 'Die KI-Analyse hat zu lange gedauert.'
-                    : 'Die KI-Analyse ist fehlgeschlagen.';
+        _analysisError =
+            'Die automatische Erfassung ist derzeit nicht verfügbar. Bitte fülle die Felder manuell aus.';
       });
     } finally {
-      _analysisRequestInProgress = false;
+      if (generation == _analysisGeneration) {
+        _analysisRequestInProgress = false;
+      } else if (mounted && _isAnalyzing) {
+        _analysisRequestInProgress = false;
+        unawaited(_analyzeReceipt());
+      }
     }
   }
 
-  void _retryAnalysis() {
+  Future<void> _returnToScanner() async {
+    final result = await Navigator.of(context).push<ReceiptOcrResult>(
+      MaterialPageRoute(builder: (_) => const ReceiptScannerScreen()),
+    );
+    if (!mounted || result == null || result.imagePath.isEmpty) return;
+
+    _analysisGeneration++;
     setState(() {
+      _scanResult = result;
       _isAnalyzing = true;
       _analysisError = null;
     });
@@ -1338,6 +1481,90 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     );
   }
 
+  Future<void> _chooseReceiptImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: GarantieHeldApp.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        bottom: true,
+        child: Padding(
+          padding: const EdgeInsets.only(
+            bottom: 24,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.28),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Belegfoto hinzufügen',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded, color: GarantieHeldApp.emerald),
+                title: const Text('Foto jetzt aufnehmen'),
+                onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded, color: GarantieHeldApp.emerald),
+                title: const Text('Aus Galerie auswählen'),
+                onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    try {
+      final image = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 92,
+      );
+      if (image == null || !mounted) return;
+      final savedPath = await _persistSelectedReceiptImage(image.path);
+      if (!mounted) return;
+      setState(() {
+        _scanResult = _scanResult.copyWith(imagePath: savedPath);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Das Belegfoto konnte nicht geladen werden.')),
+      );
+    }
+  }
+
+  Future<String> _persistSelectedReceiptImage(String sourcePath) async {
+    final documents = await getApplicationDocumentsDirectory();
+    final receiptsDirectory = Directory(path.join(documents.path, 'receipts'));
+    await receiptsDirectory.create(recursive: true);
+    final extension = path.extension(sourcePath).isEmpty
+        ? '.jpg'
+        : path.extension(sourcePath);
+    final destination = path.join(
+      receiptsDirectory.path,
+      'receipt_${DateTime.now().microsecondsSinceEpoch}$extension',
+    );
+    return (await File(sourcePath).copy(destination)).path;
+  }
+
   Widget _clearButton(TextEditingController controller) {
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
@@ -1360,7 +1587,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         backgroundColor: GarantieHeldApp.background,
         leading: IconButton(
           tooltip: 'Zurück',
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _returnToScanner,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
         title: const Text(
@@ -1438,28 +1665,78 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    if (_scanResult.imagePath.isNotEmpty) ...[
-                      Center(
-                        child: GestureDetector(
-                          onTap: _showReceiptPreview,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.file(
-                              File(_scanResult.imagePath),
-                              height: 180,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
+                    if (_scanResult.imagePath.isNotEmpty)
+                      Stack(
+                        children: [
+                          GestureDetector(
+                            onTap: _showReceiptPreview,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.file(
+                                File(_scanResult.imagePath),
                                 height: 180,
                                 width: double.infinity,
-                                alignment: Alignment.center,
-                                color: GarantieHeldApp.surface,
-                                child: const Text('Kassenbon-Bild nicht verfügbar'),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  height: 180,
+                                  width: double.infinity,
+                                  alignment: Alignment.center,
+                                  color: GarantieHeldApp.surface,
+                                  child: const Text('Kassenbon-Bild nicht verfügbar'),
+                                ),
                               ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 10,
+                            right: 10,
+                            child: Material(
+                              color: const Color(0xB31E293B),
+                              shape: const CircleBorder(),
+                              child: IconButton(
+                                tooltip: 'Belegfoto ändern',
+                                onPressed: _chooseReceiptImage,
+                                icon: const Icon(Icons.cameraswitch_rounded),
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      GestureDetector(
+                        onTap: _chooseReceiptImage,
+                        child: CustomPaint(
+                          foregroundPainter: _DashedReceiptBorderPainter(),
+                          child: Container(
+                            width: double.infinity,
+                            height: 180,
+                            decoration: BoxDecoration(
+                              color: GarantieHeldApp.surface,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.add_a_photo_rounded,
+                                  color: GarantieHeldApp.emerald,
+                                  size: 34,
+                                ),
+                                SizedBox(height: 12),
+                                Text(
+                                  'Belegfoto hinzufügen (optional)',
+                                  style: TextStyle(
+                                    color: Color(0xFFD6E0ED),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                       ),
+                    if (_scanResult.imagePath.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Center(
                         child: Text(
@@ -1470,8 +1747,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
                     ],
+                    const SizedBox(height: 20),
                     if (_isAnalyzing) ...[
                       const _GeminiAnalysisCard(
                         title: 'KI analysiert Kassenbon...',
@@ -1481,26 +1758,9 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                       if (_analysisError != null) ...[
                         _GeminiAnalysisErrorCard(
                           message: _analysisError!,
-                          onRetry: _retryAnalysis,
                         ),
                         const SizedBox(height: 16),
                       ],
-                      if (_scanResult.productPrice == null ||
-                          _scanResult.purchaseDate == null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3A321D),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          'Nicht alles wurde erkannt. Ergänze die fehlenden Angaben.',
-                          style: TextStyle(color: Color(0xFFFBBF24), fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                    ],
                     const _WizardFieldLabel('Produktname'),
                     TextFormField(
                       controller: _titleController,
@@ -1754,13 +2014,9 @@ class _GeminiAnalysisCard extends StatelessWidget {
 }
 
 class _GeminiAnalysisErrorCard extends StatelessWidget {
-  const _GeminiAnalysisErrorCard({
-    required this.message,
-    required this.onRetry,
-  });
+  const _GeminiAnalysisErrorCard({required this.message});
 
   final String message;
-  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1781,19 +2037,11 @@ class _GeminiAnalysisErrorCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '$message Du kannst die Felder manuell ausfüllen.',
+                  message,
                   style: const TextStyle(color: Color(0xFFFECACA)),
                 ),
               ),
             ],
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Erneut versuchen'),
-            ),
           ),
         ],
       ),
@@ -2297,6 +2545,31 @@ class _ScannerGuide extends StatelessWidget {
       child: CustomPaint(painter: _ScannerCornersPainter()),
     );
   }
+}
+
+class _DashedReceiptBorderPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(1, 1, size.width - 2, size.height - 2);
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16)));
+    final paint = Paint()
+      ..color = GarantieHeldApp.emerald.withValues(alpha: 0.72)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + 8).clamp(0, metric.length).toDouble();
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance = end + 6;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedReceiptBorderPainter oldDelegate) => false;
 }
 
 class _ScannerShadePainter extends CustomPainter {
