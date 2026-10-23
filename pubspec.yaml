@@ -1,4 +1,4 @@
-﻿name: garantieheld
+name: garantieheld
 description: "Privater Kassenbon- und Garantie-Safe für Android."
 publish_to: 'none'
 version: 1.0.0+1
@@ -12,8 +12,10 @@ dependencies:
     sdk: flutter
   camera: ^0.10.5+9
   flutter_local_notifications: ^17.0.0
+  google_generative_ai: ^0.4.7
   google_fonts: ^6.1.0
-  google_mlkit_text_recognition: ^0.17.1
+  http: ^1.6.0
+  image_picker: ^1.2.1
   intl: ^0.19.0
   path: ^1.8.3
   path_provider: ^2.1.1
@@ -22,6 +24,7 @@ dependencies:
   printing: ^5.13.1
   sqflite: ^2.3.0
   timezone: ^0.9.2
+  gal: ^2.3.3
 
 dev_dependencies:
   flutter_test:

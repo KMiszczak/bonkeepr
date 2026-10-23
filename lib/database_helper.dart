@@ -49,6 +49,15 @@ class DatabaseHelper {
     );
   }
 
+  Future<int> updateWarranty(Warranty warranty) async {
+    return (await database).update(
+      _tableName,
+      warranty.toMap(),
+      where: 'id = ?',
+      whereArgs: [warranty.id],
+    );
+  }
+
   Future<List<Warranty>> getAllWarranties() async {
     final rows = await (await database).query(
       _tableName,
