@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:camera/camera.dart';
@@ -12,10 +13,12 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'database_helper.dart';
 import 'gemini_receipt_analyzer.dart';
 import 'receipt_ocr_parser.dart';
+import 'settings_screen.dart';
 import 'warranty_model.dart';
 import 'widgets/primary_button.dart';
 
@@ -244,6 +247,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await overlay;
   }
 
+  Future<void> _showInfoSheet() => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => const _BonKeeprInfoSheet(),
+      );
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -251,18 +261,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
       child: Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.shield_outlined, color: GarantieHeldApp.emerald),
-            SizedBox(width: 10),
-            Text('BonKeepr', style: TextStyle(fontWeight: FontWeight.w700)),
+            Image.asset(
+              'assets/bonkeeprlogotransparent.png',
+              height: 32,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 10),
+            const Text('BonKeepr', style: TextStyle(fontWeight: FontWeight.w700)),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Aktualisieren',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Über BonKeepr',
+            onPressed: _showInfoSheet,
+            icon: const Icon(Icons.info_outline),
+            color: GarantieHeldApp.emerald,
+          ),
+          IconButton(
+            tooltip: 'Einstellungen',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const SettingsScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.settings_outlined),
+            color: GarantieHeldApp.emerald,
           ),
         ],
       ),
@@ -465,6 +490,177 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+class _BonKeeprInfoSheet extends StatelessWidget {
+  const _BonKeeprInfoSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      heightFactor: 0.84,
+      child: Material(
+        color: GarantieHeldApp.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        clipBehavior: Clip.antiAlias,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.34),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Image.asset(
+                        'assets/bonkeeprlogotransparent.png',
+                        height: 80,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    SizedBox(height: 18),
+                    Text(
+                      'Willkommen bei BonKeepr 🛡️',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 23,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Deine digitale Garage für Garantien & Kassenbons.',
+                      style: TextStyle(
+                        color: Color(0xFFCBD5E1),
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFF263449)),
+              const Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(24, 10, 24, 10),
+                  child: Column(
+                    children: [
+                      _InfoFeature(
+                        icon: Icons.auto_awesome_rounded,
+                        text: 'KI-Erkennung: Fotografiere deinen Beleg – Händler, Preis & Datum werden automatisch erfasst.',
+                      ),
+                      _InfoFeature(
+                        icon: Icons.schedule_rounded,
+                        text: 'Garantie-Scanner: Behalte die Ablaufdaten deiner Geräte immer im Blick.',
+                      ),
+                      _InfoFeature(
+                        icon: Icons.lock_outline_rounded,
+                        text: '100% Datensicherheit: Deine Daten gehören dir. Standardmäßig komplett lokale Speicherung auf deinem Gerät.',
+                      ),
+                      _InfoFeature(
+                        icon: Icons.import_export_rounded,
+                        text: 'Offline Import/Export: Sichere deine Daten jederzeit als CSV oder exportiere Belege offline.',
+                      ),
+                      _InfoFeature(
+                        icon: Icons.cloud_outlined,
+                        text: 'Cloud-Backup (Optional): Die verschlüsselte Google-Drive-Sicherung ist in Vorbereitung.',
+                      ),
+                      _InfoFeature(
+                        icon: Icons.share_outlined,
+                        text: 'Belege teilen: Sende Garantiedaten und Kassenbon-Fotos direkt per WhatsApp, Mail & Co. an Partner oder den Support.',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: GarantieHeldApp.emerald,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    child: const Text('Verstanden'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoFeature extends StatelessWidget {
+  const _InfoFeature({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final separator = text.indexOf(':');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, color: GarantieHeldApp.emerald, size: 21),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                  color: Color(0xFFE2E8F0),
+                  fontSize: 13,
+                  height: 1.42,
+                ),
+                children: [
+                  if (separator >= 0)
+                    TextSpan(
+                      text: text.substring(0, separator + 1),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  TextSpan(
+                    text: separator >= 0 ? text.substring(separator + 1) : text,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class WarrantyDetailResult {
   const WarrantyDetailResult({this.updatedWarranty, this.deletedWarrantyId});
 
@@ -535,6 +731,32 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
     Navigator.of(context).pop(
       WarrantyDetailResult(deletedWarrantyId: widget.warranty.id),
     );
+  }
+
+  Future<void> _shareWarranty() async {
+    final warranty = widget.warranty;
+    final purchaseDate = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.purchaseDate);
+    final expirationDate = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.expirationDate);
+    final price = '${NumberFormat('#,##0.00', 'de_DE').format(warranty.price)} €';
+    final text = '''📄 BonKeepr Beleg-Export
+
+Produkt: ${warranty.title}
+Händler: ${warranty.storeName.isEmpty ? '—' : warranty.storeName}
+Kaufpreis: $price
+Kaufdatum: $purchaseDate
+Garantie bis: $expirationDate
+
+Gesichert mit BonKeepr 🛡️''';
+
+    try {
+      final imagePath = warranty.imagePath;
+      final files = imagePath.isNotEmpty && await File(imagePath).exists()
+          ? [XFile(imagePath)]
+          : <XFile>[];
+      await SharePlus.instance.share(ShareParams(text: text, files: files));
+    } catch (_) {
+      _showMessage('Der Beleg konnte nicht geteilt werden.');
+    }
   }
 
   Future<void> _exportReceipt() async {
@@ -712,11 +934,11 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
         ),
         backgroundColor: GarantieHeldApp.background,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: Center(
-              child: _WarrantyStatusBadge(isActive: !warranty.isExpired),
-            ),
+          IconButton(
+            tooltip: 'Beleg teilen',
+            onPressed: _shareWarranty,
+            icon: const Icon(Icons.ios_share),
+            color: const Color(0xFF10B981),
           ),
         ],
       ),
@@ -784,9 +1006,18 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
             ),
             const SizedBox(height: 24),
           ],
-          Text(
-            warranty.title,
-            style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  warranty.title,
+                  style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _WarrantyStatusBadge(isActive: !warranty.isExpired),
+            ],
           ),
           const SizedBox(height: 18),
           _WarrantyDetailTile(label: 'Händler', value: warranty.storeName.isEmpty ? '—' : warranty.storeName),
@@ -1269,6 +1500,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   bool _dateError = false;
   bool _isAnalyzing = false;
   bool _analysisRequestInProgress = false;
+  bool _allowPop = false;
   int _analysisGeneration = 0;
   String? _analysisError;
 
@@ -1279,7 +1511,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     final existing = widget.warranty;
     _scanResult = result;
     _titleController = TextEditingController(
-      text: existing?.title ?? result.productTitle,
+      text: existing?.title ?? '',
     );
     _storeController.text = existing?.storeName ?? result.storeName;
     final initialPrice = existing?.price ?? result.productPrice;
@@ -1299,6 +1531,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     _analysisRequestInProgress = true;
     final generation = ++_analysisGeneration;
     final imagePath = _scanResult.imagePath;
+    final overlayDuration = Stopwatch()..start();
     try {
       if (kDebugMode) {
         debugPrint(
@@ -1309,6 +1542,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       final result = await GeminiReceiptAnalyzer.analyzeReceipt(
         imagePath: imagePath,
       );
+      if (!mounted || generation != _analysisGeneration) return;
+      await _waitForMinimumAnalysisDuration(overlayDuration);
       if (!mounted || generation != _analysisGeneration) return;
       setState(() {
         _scanResult = result.copyWith(imagePath: _scanResult.imagePath);
@@ -1333,6 +1568,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         debugPrintStack(stackTrace: stackTrace);
       }
       if (!mounted || generation != _analysisGeneration) return;
+      await _waitForMinimumAnalysisDuration(overlayDuration);
+      if (!mounted || generation != _analysisGeneration) return;
       setState(() {
         _isAnalyzing = false;
         _analysisError =
@@ -1348,9 +1585,21 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     }
   }
 
+  Future<void> _waitForMinimumAnalysisDuration(Stopwatch stopwatch) async {
+    const minimumDuration = Duration(seconds: 3);
+    final remaining = minimumDuration - stopwatch.elapsed;
+    if (remaining > Duration.zero) await Future<void>.delayed(remaining);
+  }
+
   Future<void> _returnToScanner() async {
     final result = await Navigator.of(context).push<ReceiptOcrResult>(
-      MaterialPageRoute(builder: (_) => const ReceiptScannerScreen()),
+      MaterialPageRoute(
+        builder: (_) => ReceiptScannerScreen(
+          onCancelToHome: () {
+            if (mounted) setState(() => _allowPop = true);
+          },
+        ),
+      ),
     );
     if (!mounted || result == null || result.imagePath.isEmpty) return;
 
@@ -1361,6 +1610,14 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       _analysisError = null;
     });
     unawaited(_analyzeReceipt());
+  }
+
+  void _handleBackNavigation() {
+    if (widget.warranty != null) {
+      Navigator.of(context).pop();
+    } else {
+      unawaited(_returnToScanner());
+    }
   }
 
   Category _categoryFromGemini(String value) => switch (value.trim().toLowerCase()) {
@@ -1381,7 +1638,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_purchaseDate == null) {
       setState(() => _dateError = true);
@@ -1400,6 +1657,11 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       notes: widget.warranty?.notes,
       reminderDaysBefore: widget.warranty?.reminderDaysBefore ?? 30,
     );
+    if (widget.warranty == null) {
+      setState(() => _allowPop = true);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
     Navigator.of(context).pop(warranty);
   }
 
@@ -1581,29 +1843,44 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   @override
   Widget build(BuildContext context) {
     const availableMonths = [12, 24, 36];
-    return Scaffold(
+    final isEditing = widget.warranty != null;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PopScope<Warranty?>(
+          canPop: isEditing || _allowPop,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && !isEditing && !_allowPop) {
+              _handleBackNavigation();
+            }
+          },
+          child: Scaffold(
       backgroundColor: GarantieHeldApp.background,
       appBar: AppBar(
         backgroundColor: GarantieHeldApp.background,
         leading: IconButton(
           tooltip: 'Zurück',
-          onPressed: _returnToScanner,
+          onPressed: _handleBackNavigation,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text(
-          'Garantie bestätigen',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        title: Text(
+          isEditing ? 'Garantie bearbeiten' : 'Garantie bestätigen',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 20),
-            child: Center(
-              child: Text(
-                'Schritt 2/2',
-                style: TextStyle(color: Colors.white.withOpacity(0.56), fontSize: 12),
+          if (!isEditing)
+            Padding(
+              padding: const EdgeInsets.only(right: 20),
+              child: Center(
+                child: Text(
+                  'Schritt 2/2',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.56),
+                    fontSize: 12,
+                  ),
+                ),
               ),
             ),
-          ),
         ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -1749,22 +2026,14 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                       ),
                     ],
                     const SizedBox(height: 20),
-                    if (_isAnalyzing) ...[
-                      const _GeminiAnalysisCard(
-                        title: 'KI analysiert Kassenbon...',
-                        subtitle: 'Produkt, Einzelpreis, Händler und Datum werden erkannt.',
-                      ),
-                    ] else ...[
-                      if (_analysisError != null) ...[
-                        _GeminiAnalysisErrorCard(
-                          message: _analysisError!,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
+                    if (_analysisError != null) ...[
+                      _GeminiAnalysisErrorCard(message: _analysisError!),
+                      const SizedBox(height: 16),
+                    ],
                     const _WizardFieldLabel('Produktname'),
                     TextFormField(
                       controller: _titleController,
-                      autofocus: _titleController.text.isEmpty,
+                      autofocus: !_isAnalyzing && _titleController.text.isEmpty,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: _wizardInputDecoration(
                         hintText: 'z. B. MOBILE ENERGIESTATION',
@@ -1901,7 +2170,6 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                         () => _warrantyMonths = value ?? _warrantyMonths,
                       ),
                     ),
-                    ],
                   ],
                 ),
               ),
@@ -1923,6 +2191,33 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
           ],
         ),
       ),
+          ),
+        ),
+        Positioned.fill(
+          child: AbsorbPointer(
+            absorbing: _isAnalyzing,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.98, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: _isAnalyzing
+                  ? const _ReceiptAnalysisOverlay(
+                      key: ValueKey('receipt-analysis-overlay'),
+                    )
+                  : const SizedBox.expand(
+                      key: ValueKey('receipt-analysis-idle'),
+                    ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1969,48 +2264,259 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       };
 }
 
-class _GeminiAnalysisCard extends StatelessWidget {
-  const _GeminiAnalysisCard({required this.title, required this.subtitle});
+class _ReceiptAnalysisOverlay extends StatefulWidget {
+  const _ReceiptAnalysisOverlay({super.key});
 
-  final String title;
-  final String subtitle;
+  @override
+  State<_ReceiptAnalysisOverlay> createState() => _ReceiptAnalysisOverlayState();
+}
+
+class _ReceiptAnalysisOverlayState extends State<_ReceiptAnalysisOverlay>
+    with TickerProviderStateMixin {
+  late final AnimationController _animationController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 5),
+  )..repeat();
+  late final AnimationController _pulseController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat(reverse: true);
+  late final Animation<double> _pulse = Tween<double>(begin: 0.96, end: 1.04)
+      .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+  late final Timer _badgeTimer;
+  int _visibleBadgeCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _badgeTimer = Timer.periodic(const Duration(milliseconds: 800), (timer) {
+      if (!mounted) return;
+      setState(() => _visibleBadgeCount = (_visibleBadgeCount + 1).clamp(0, 3));
+      if (_visibleBadgeCount >= 3) timer.cancel();
+    });
+  }
+
+  @override
+  void dispose() {
+    _badgeTimer.cancel();
+    _animationController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  Widget _successBadge(String label, bool visible) {
+    return AnimatedOpacity(
+      opacity: visible ? 1 : 0,
+      duration: const Duration(milliseconds: 220),
+      child: AnimatedScale(
+        scale: visible ? 1 : 0.58,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutBack,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xCC1E293B),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: GarantieHeldApp.emerald.withValues(alpha: 0.42),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: GarantieHeldApp.emerald.withValues(alpha: 0.12),
+                    blurRadius: 14,
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: GarantieHeldApp.emerald,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      decoration: BoxDecoration(
-        color: GarantieHeldApp.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-      ),
-      child: Column(
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          const SizedBox(
-            width: 34,
-            height: 34,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              color: GarantieHeldApp.emerald,
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: ColoredBox(color: Colors.black.withValues(alpha: 0.6)),
+          ),
+          SafeArea(
+            child: Center(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final orbSize = math.min(constraints.maxWidth * 0.42, 170.0);
+                  final stageWidth = math.min(constraints.maxWidth - 32, 360.0);
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: stageWidth,
+                        height: 300,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            AnimatedBuilder(
+                              animation: _animationController,
+                              builder: (context, _) => CustomPaint(
+                                size: Size(stageWidth, 300),
+                                painter: _NeuralSparklePainter(
+                                  progress: _animationController.value,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 0,
+                              top: 48,
+                              child: _successBadge('Händler', _visibleBadgeCount >= 1),
+                            ),
+                            Positioned(
+                              right: 0,
+                              top: 76,
+                              child: _successBadge('Kaufpreis', _visibleBadgeCount >= 2),
+                            ),
+                            Positioned(
+                              left: 28,
+                              bottom: 34,
+                              child: _successBadge('Datum', _visibleBadgeCount >= 3),
+                            ),
+                            AnimatedBuilder(
+                              animation: _pulse,
+                              builder: (context, child) => Transform.scale(
+                                scale: _pulse.value,
+                                child: RotationTransition(
+                                  turns: _animationController,
+                                  child: child,
+                                ),
+                              ),
+                              child: Container(
+                                width: orbSize,
+                                height: orbSize,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: const RadialGradient(
+                                    center: Alignment(-0.28, -0.34),
+                                    colors: [
+                                      Color(0xFF6EE7B7),
+                                      Color(0xFF10B981),
+                                      Color(0xFF0F766E),
+                                      Color(0xFF0F172A),
+                                    ],
+                                    stops: [0, 0.35, 0.72, 1],
+                                  ),
+                                  border: Border.all(
+                                    color: const Color(0xFF6EE7B7).withValues(alpha: 0.78),
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: GarantieHeldApp.emerald.withValues(alpha: 0.5),
+                                      blurRadius: 46,
+                                      spreadRadius: 7,
+                                    ),
+                                    BoxShadow(
+                                      color: const Color(0xFF2DD4BF).withValues(alpha: 0.28),
+                                      blurRadius: 72,
+                                      spreadRadius: 14,
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Icon(
+                                    Icons.auto_awesome_rounded,
+                                    size: orbSize * 0.44,
+                                    color: Colors.white,
+                                    shadows: const [
+                                      Shadow(color: Color(0xCC10B981), blurRadius: 24),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          'KI liest Produkt & Händler aus...',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white.withOpacity(0.62), fontSize: 13),
           ),
         ],
       ),
     );
   }
+}
+
+class _NeuralSparklePainter extends CustomPainter {
+  const _NeuralSparklePainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final paint = Paint()..style = PaintingStyle.fill;
+    for (var index = 0; index < 18; index++) {
+      final phase = (index / 18) * math.pi * 2;
+      final angle = phase + progress * math.pi * 2;
+      final radiusX = size.width * (0.23 + (index % 3) * 0.035);
+      final radiusY = size.height * (0.22 + (index % 4) * 0.025);
+      final point = Offset(
+        center.dx + math.cos(angle) * radiusX,
+        center.dy + math.sin(angle) * radiusY,
+      );
+      final opacity = 0.22 + ((index % 5) * 0.12);
+      paint.color = GarantieHeldApp.emerald.withValues(alpha: opacity);
+      canvas.drawCircle(point, 1.4 + (index % 3) * 0.65, paint);
+      paint.color = const Color(0xFF5EEAD4).withValues(alpha: opacity * 0.3);
+      canvas.drawCircle(point, 4.0 + (index % 2), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _NeuralSparklePainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _GeminiAnalysisErrorCard extends StatelessWidget {
@@ -2111,7 +2617,9 @@ class _WarrantyDurationPill extends StatelessWidget {
 }
 
 class ReceiptScannerScreen extends StatefulWidget {
-  const ReceiptScannerScreen({super.key});
+  const ReceiptScannerScreen({super.key, this.onCancelToHome});
+
+  final VoidCallback? onCancelToHome;
 
   @override
   State<ReceiptScannerScreen> createState() => _ReceiptScannerScreenState();
@@ -2124,6 +2632,8 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   bool _busy = false;
   bool _flashEnabled = false;
   bool _canOpenSettings = false;
+  bool _allowPop = false;
+  bool _leavingHome = false;
 
   @override
   void initState() {
@@ -2202,7 +2712,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       if (identical(_controller, controller)) _controller = null;
       await controller.dispose();
       if (mounted) {
-        Navigator.of(context).pop(
+        await _popWithResult(
           ReceiptOcrParser.parse('', imagePath: imagePath),
         );
       }
@@ -2261,7 +2771,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       _controller = null;
       await controller?.dispose();
       if (mounted) {
-        Navigator.of(context).pop(ReceiptOcrParser.parse('', imagePath: imagePath));
+        await _popWithResult(ReceiptOcrParser.parse('', imagePath: imagePath));
       }
     } catch (_) {
       if (mounted) {
@@ -2276,7 +2786,29 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
 
   void _continueManually() {
     if (_busy) return;
-    Navigator.of(context).pop(ReceiptOcrParser.parse(''));
+    unawaited(_popWithResult(ReceiptOcrParser.parse('')));
+  }
+
+  Future<void> _popWithResult(ReceiptOcrResult result) async {
+    _allowPop = true;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
+  }
+
+  Future<void> _leaveToHome() async {
+    if (_busy || _leavingHome) return;
+    _leavingHome = true;
+    final controller = _controller;
+    _controller = null;
+    await controller?.dispose();
+    if (!mounted) return;
+
+    widget.onCancelToHome?.call();
+    _allowPop = true;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<String> _persistReceiptImage(String sourcePath) async {
@@ -2302,13 +2834,23 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    return Scaffold(
+    return PopScope<ReceiptOcrResult>(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && !_allowPop) unawaited(_leaveToHome());
+      },
+      child: Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         titleSpacing: 0,
         title: const Text('Bon scannen'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        leading: IconButton(
+          tooltip: 'Zur Startseite',
+          onPressed: _busy ? null : _leaveToHome,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
         actions: [
           IconButton(
             tooltip: _flashEnabled ? 'Blitz ausschalten' : 'Blitz einschalten',
@@ -2350,9 +2892,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                     const Text('Du kannst die Garantie anschließend manuell erfassen.'),
                     const SizedBox(height: 18),
                     FilledButton(
-                      onPressed: () => Navigator.of(context).pop(
-                        ReceiptOcrParser.parse(''),
-                      ),
+                      onPressed: () => _continueManually(),
                       child: const Text('Manuell eingeben'),
                     ),
                     if (_canOpenSettings) ...[
@@ -2372,6 +2912,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                   child: CircularProgressIndicator(color: GarantieHeldApp.emerald),
                 )
               : _buildCameraScanner(controller),
+      ),
     );
   }
 

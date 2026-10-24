@@ -66,6 +66,19 @@ class DatabaseHelper {
     return rows.map(Warranty.fromMap).toList(growable: false);
   }
 
+  Future<void> importWarranties(List<Warranty> warranties) async {
+    final db = await database;
+    await db.transaction((transaction) async {
+      for (final warranty in warranties) {
+        await transaction.insert(
+          _tableName,
+          warranty.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
+
   Future<int> deleteWarranty(String id) async {
     return (await database).delete(
       _tableName,
