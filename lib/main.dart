@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
@@ -22,12 +22,14 @@ import 'gemini_receipt_analyzer.dart';
 import 'notification_service.dart';
 import 'receipt_ocr_parser.dart';
 import 'settings_screen.dart';
+import 'theme_controller.dart';
 import 'warranty_model.dart';
 import 'widgets/primary_button.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('de_DE');
+  await ThemeController.instance.load();
   runApp(const GarantieHeldApp());
 }
 
@@ -37,69 +39,71 @@ class GarantieHeldApp extends StatelessWidget {
   static const emerald = Color(0xFF10B981);
   static const background = Color(0xFF0F172A);
   static const surface = Color(0xFF1E293B);
+  static Color surfaceFor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? surface : Colors.white;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: background,
-      colorScheme: const ColorScheme.dark(
-        primary: emerald,
-        secondary: Color(0xFF34D399),
-        surface: surface,
-        error: Color(0xFFF87171),
-      ),
-      fontFamily: 'Roboto',
-    );
-    return MaterialApp(
-      title: 'GarantieHeld',
-      debugShowCheckedModeBanner: false,
-      theme: theme.copyWith(
-        appBarTheme: const AppBarTheme(
-          backgroundColor: background,
-          foregroundColor: Colors.white,
-          elevation: 0,
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: ThemeController.instance,
+    builder: (context, _) {
+      ThemeData buildTheme(bool dark) => ThemeData(
+        useMaterial3: true,
+        brightness: dark ? Brightness.dark : Brightness.light,
+        scaffoldBackgroundColor: dark ? background : const Color(0xFFF1F5F9),
+        colorScheme: dark
+            ? const ColorScheme.dark(
+                primary: emerald,
+                secondary: Color(0xFF34D399),
+                surface: surface,
+                error: Color(0xFFF87171),
+              )
+            : const ColorScheme.light(
+                primary: emerald,
+                secondary: Color(0xFF059669),
+                surface: Colors.white,
+                error: Color(0xFFDC2626),
+              ),
+        fontFamily: 'Roboto',
+      );
+      final darkTheme = buildTheme(true);
+      final lightTheme = buildTheme(false);
+      return MaterialApp(
+        title: 'GarantieHeld',
+        debugShowCheckedModeBanner: false,
+        theme: lightTheme.copyWith(
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFFF1F5F9),
+            foregroundColor: Color(0xFF0F172A),
+            elevation: 0,
+          ),
+          inputDecorationTheme: lightTheme.inputDecorationTheme,
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: surface,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: emerald, width: 1.5),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFF87171)),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFF87171), width: 1.5),
+        darkTheme: darkTheme.copyWith(
+          appBarTheme: const AppBarTheme(
+            backgroundColor: background,
+            foregroundColor: Colors.white,
+            elevation: 0,
           ),
         ),
-      ),
-      home: const DashboardScreen(),
-    );
-  }
+        themeMode: ThemeController.instance.themeMode,
+        home: const DashboardScreen(),
+      );
+    },
+  );
 }
 
 Future<void> _shareWarrantyData(BuildContext context, Warranty warranty) async {
-  final purchaseDate = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.purchaseDate);
-  final expirationDate = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.expirationDate);
+  final purchaseDate = DateFormat(
+    'dd.MM.yyyy',
+    'de_DE',
+  ).format(warranty.purchaseDate);
+  final expirationDate = DateFormat(
+    'dd.MM.yyyy',
+    'de_DE',
+  ).format(warranty.expirationDate);
   final price = '${NumberFormat('#,##0.00', 'de_DE').format(warranty.price)} €';
-  final text = '''📄 BonKeepr Beleg-Export
+  final text =
+      '''📄 BonKeepr Beleg-Export
 
 Produkt: ${warranty.title}
 Händler: ${warranty.storeName.isEmpty ? '—' : warranty.storeName}
@@ -123,12 +127,131 @@ Gesichert mit BonKeepr 🛡️''';
   }
 }
 
+class _ReceiptCarouselDialog extends StatefulWidget {
+  const _ReceiptCarouselDialog({required this.receiptPaths});
+
+  final List<String> receiptPaths;
+
+  @override
+  State<_ReceiptCarouselDialog> createState() => _ReceiptCarouselDialogState();
+}
+
+class _ReceiptCarouselDialogState extends State<_ReceiptCarouselDialog> {
+  late final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Dialog.fullscreen(
+    child: Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Belege'),
+        leading: IconButton(
+          tooltip: 'Schließen',
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.close),
+        ),
+      ),
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.receiptPaths.length,
+            onPageChanged: (page) => setState(() => _currentPage = page),
+            itemBuilder: (context, index) {
+              final mediaPath = widget.receiptPaths[index];
+              if (_isPdfPath(mediaPath)) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.picture_as_pdf_rounded,
+                        color: Color(0xFFF87171),
+                        size: 72,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'PDF-Beleg',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: () => OpenFilex.open(mediaPath),
+                        icon: const Icon(Icons.open_in_new_rounded),
+                        label: const Text('Mit Standard-App öffnen'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return InteractiveViewer(
+                panEnabled: false,
+                minScale: 1,
+                maxScale: 6,
+                child: Center(
+                  child: Image.file(
+                    File(mediaPath),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Text(
+                      'Belegfoto nicht verfügbar',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 20,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Text(
+                  '${_currentPage + 1}/${widget.receiptPaths.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
+
+enum _WarrantySort { expiration, purchase, price, name, merchant }
 
 class _DashboardScreenState extends State<DashboardScreen> {
   late Future<List<Warranty>> _warrantiesFuture;
@@ -138,6 +261,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Set<String> _deletingWarrantyIds = {};
   final Set<String> _hiddenWarrantyIds = {};
   String _searchQuery = '';
+  _WarrantySort _sort = _WarrantySort.expiration;
+
+  void _sortWarranties(List<Warranty> items) {
+    items.sort(
+      (a, b) => switch (_sort) {
+        _WarrantySort.expiration => a.expirationDate.compareTo(
+          b.expirationDate,
+        ),
+        _WarrantySort.purchase => b.purchaseDate.compareTo(a.purchaseDate),
+        _WarrantySort.price => b.price.compareTo(a.price),
+        _WarrantySort.name => a.title.toLowerCase().compareTo(
+          b.title.toLowerCase(),
+        ),
+        _WarrantySort.merchant => a.storeName.toLowerCase().compareTo(
+          b.storeName.toLowerCase(),
+        ),
+      },
+    );
+  }
+
+  Future<void> _showSortOptions() async {
+    final selected = await showModalBottomSheet<_WarrantySort>(
+      context: context,
+      backgroundColor: GarantieHeldApp.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Sortieren nach',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              for (final option in _WarrantySort.values)
+                ListTile(
+                  leading: Text(switch (option) {
+                    _WarrantySort.expiration => '⏳',
+                    _WarrantySort.purchase => '📅',
+                    _WarrantySort.price => '💰',
+                    _WarrantySort.name => '🔤',
+                    _WarrantySort.merchant => '🏪',
+                  }, style: const TextStyle(fontSize: 19)),
+                  title: Text(switch (option) {
+                    _WarrantySort.expiration =>
+                      'Ablaufdatum (Dringendste zuerst)',
+                    _WarrantySort.purchase => 'Kaufdatum (Neueste zuerst)',
+                    _WarrantySort.price => 'Preis (Höchster zuerst)',
+                    _WarrantySort.name => 'Name (A bis Z)',
+                    _WarrantySort.merchant => 'Händler (A bis Z)',
+                  }),
+                  trailing: _sort == option
+                      ? const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'AKTIV',
+                              style: TextStyle(
+                                color: GarantieHeldApp.emerald,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Icon(
+                              Icons.check_circle,
+                              color: GarantieHeldApp.emerald,
+                            ),
+                          ],
+                        )
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop(option),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null && mounted) setState(() => _sort = selected);
+  }
 
   @override
   void initState() {
@@ -171,7 +378,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
     if (warranty == null || !mounted) return;
     await DatabaseHelper.instance.insertWarranty(warranty);
-    final scheduled = await NotificationService.scheduleWarrantyReminder(warranty);
+    final scheduled = await NotificationService.scheduleWarrantyReminder(
+      warranty,
+    );
     if (!mounted) return;
     await _refresh();
     if (!mounted) return;
@@ -183,18 +392,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _openWarrantyDetails(Warranty warranty) async {
     final result = await Navigator.of(context).push<WarrantyDetailResult>(
-      MaterialPageRoute(
-        builder: (_) => WarrantyDetailPage(warranty: warranty),
-      ),
+      MaterialPageRoute(builder: (_) => WarrantyDetailPage(warranty: warranty)),
     );
     if (!mounted || result == null) return;
     if (result.updatedWarranty != null) {
-      await NotificationService.scheduleWarrantyReminder(result.updatedWarranty!);
+      await NotificationService.scheduleWarrantyReminder(
+        result.updatedWarranty!,
+      );
       await _refresh();
     } else if (result.deletedWarrantyId != null) {
-      await NotificationService.cancelWarrantyReminder(result.deletedWarrantyId!);
+      await NotificationService.cancelWarrantyReminder(
+        result.deletedWarrantyId!,
+      );
       await _animateDeletedWarranty(result.deletedWarrantyId!);
     }
+  }
+
+  Future<void> _previewWarrantyReceipt(Warranty warranty) async {
+    final receiptPaths = <String>[];
+    for (final receiptPath in warranty.allReceiptPaths.take(3)) {
+      if (receiptPath.isNotEmpty && await File(receiptPath).exists()) {
+        receiptPaths.add(receiptPath);
+      }
+    }
+    if (receiptPaths.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Belegdatei nicht verfügbar.')),
+        );
+      }
+      return;
+    }
+    if (receiptPaths.length == 1 && _isPdfPath(receiptPaths.single)) {
+      await OpenFilex.open(receiptPaths.single);
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (_) => _ReceiptCarouselDialog(receiptPaths: receiptPaths),
+    );
   }
 
   Future<void> _editWarrantyFromCard(Warranty warranty) async {
@@ -217,7 +455,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
     if (result == null || !mounted) return;
     await DatabaseHelper.instance.updateWarranty(result);
-    final scheduled = await NotificationService.scheduleWarrantyReminder(result);
+    final scheduled = await NotificationService.scheduleWarrantyReminder(
+      result,
+    );
     if (!mounted) return;
     await _refresh();
     if (!scheduled && result.reminderDaysBefore >= 0) {
@@ -241,7 +481,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: GarantieHeldApp.surface,
         title: const Text('Garantie wirklich löschen?'),
-        content: const Text('Diese Aktion kann nicht rückgängig gemacht werden.'),
+        content: const Text(
+          'Diese Aktion kann nicht rückgängig gemacht werden.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -249,7 +491,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFF87171)),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFF87171),
+            ),
             child: const Text('Löschen'),
           ),
         ],
@@ -301,7 +545,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: GarantieHeldApp.emerald.withValues(alpha: 0.14),
                       boxShadow: [
                         BoxShadow(
-                          color: GarantieHeldApp.emerald.withValues(alpha: 0.42),
+                          color: GarantieHeldApp.emerald.withValues(
+                            alpha: 0.42,
+                          ),
                           blurRadius: 42,
                           spreadRadius: 8,
                         ),
@@ -349,11 +595,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _showInfoSheet() => showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => const _BonKeeprInfoSheet(),
-      );
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _BonKeeprInfoSheet(),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -361,235 +607,282 @@ class _DashboardScreenState extends State<DashboardScreen> {
       behavior: HitTestBehavior.translucent,
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
       child: Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/bonkeeprlogotransparent.png',
-              height: 32,
-              fit: BoxFit.contain,
+        appBar: AppBar(
+          title: Row(
+            children: [
+              Image.asset(
+                'assets/bonkeeprlogotransparent.png',
+                height: 32,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'BonKeepr',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Über BonKeepr',
+              onPressed: _showInfoSheet,
+              icon: const Icon(Icons.info_outline),
+              color: GarantieHeldApp.emerald,
             ),
-            const SizedBox(width: 10),
-            const Text('BonKeepr', style: TextStyle(fontWeight: FontWeight.w700)),
+            IconButton(
+              tooltip: 'Einstellungen',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => SettingsScreen(
+                    onDataImported: _refresh,
+                    onThemeModeChanged: ThemeController.instance.setThemeMode,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.settings_outlined),
+              color: GarantieHeldApp.emerald,
+            ),
           ],
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Über BonKeepr',
-            onPressed: _showInfoSheet,
-            icon: const Icon(Icons.info_outline),
-            color: GarantieHeldApp.emerald,
-          ),
-          IconButton(
-            tooltip: 'Einstellungen',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const SettingsScreen(),
-              ),
-            ),
-            icon: const Icon(Icons.settings_outlined),
-            color: GarantieHeldApp.emerald,
-          ),
-        ],
-      ),
-      extendBody: true,
-      body: FutureBuilder<List<Warranty>>(
-        future: _warrantiesFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(color: GarantieHeldApp.emerald),
-            );
-          }
-          if (snapshot.hasError) return _LoadError(onRetry: _refresh);
+        extendBody: true,
+        body: FutureBuilder<List<Warranty>>(
+          future: _warrantiesFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: GarantieHeldApp.emerald,
+                ),
+              );
+            }
+            if (snapshot.hasError) return _LoadError(onRetry: _refresh);
 
-          final warranties = (snapshot.data ?? const <Warranty>[])
-              .where((item) => !_hiddenWarrantyIds.contains(item.id))
-              .toList(growable: false);
-          final query = _searchQuery.trim().toLowerCase();
-          final filteredWarranties = warranties.where((item) {
-            return query.isEmpty ||
-                item.title.toLowerCase().contains(query) ||
-                item.storeName.toLowerCase().contains(query);
-          }).toList(growable: false);
-          final active = warranties.where((item) => !item.isExpired).toList();
-          final expiring = active.where((item) => item.isExpiringSoon).length;
-          final protectedTotal = active.fold<double>(
-            0,
-            (total, item) => total + item.price,
-          );
-          return RefreshIndicator(
-            color: GarantieHeldApp.emerald,
-            onRefresh: _refresh,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 150),
-                  sliver: SliverList.list(
-                    children: [
-                      _ProtectedValueCard(
-                        amount: _currency.format(protectedTotal),
-                        activeCount: active.length,
-                        expiringCount: expiring,
-                      ),
-                      const SizedBox(height: 20),
-                      TextField(
-                        controller: _searchController,
-                        onChanged: (value) => setState(() => _searchQuery = value),
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          hintText: 'Garantie oder Händler suchen...',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                            valueListenable: _searchController,
-                            builder: (context, value, _) => value.text.isEmpty
-                                ? const SizedBox.shrink()
-                                : IconButton(
-                                    tooltip: 'Suche leeren',
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _searchQuery = '');
-                                    },
-                                    icon: const Icon(Icons.clear_rounded),
-                                  ),
-                          ),
-                          filled: true,
-                          fillColor: GarantieHeldApp.surface,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 15,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: GarantieHeldApp.emerald,
-                              width: 1.4,
+            final warranties = (snapshot.data ?? const <Warranty>[])
+                .where((item) => !_hiddenWarrantyIds.contains(item.id))
+                .toList(growable: false);
+            final query = _searchQuery.trim().toLowerCase();
+            final filteredWarranties = warranties.where((item) {
+              return query.isEmpty ||
+                  item.title.toLowerCase().contains(query) ||
+                  item.storeName.toLowerCase().contains(query);
+            }).toList();
+            _sortWarranties(filteredWarranties);
+            final active = warranties.where((item) => !item.isExpired).toList();
+            final expiring = active.where((item) => item.isExpiringSoon).length;
+            final protectedTotal = active.fold<double>(
+              0,
+              (total, item) => total + item.price,
+            );
+            return RefreshIndicator(
+              color: GarantieHeldApp.emerald,
+              onRefresh: _refresh,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 150),
+                    sliver: SliverList.list(
+                      children: [
+                        _ProtectedValueCard(
+                          amount: _currency.format(protectedTotal),
+                          activeCount: active.length,
+                          expiringCount: expiring,
+                        ),
+                        const SizedBox(height: 20),
+                        TextField(
+                          controller: _searchController,
+                          onChanged: (value) =>
+                              setState(() => _searchQuery = value),
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            hintText: 'Garantie oder Händler suchen...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon:
+                                ValueListenableBuilder<TextEditingValue>(
+                                  valueListenable: _searchController,
+                                  builder: (context, value, _) =>
+                                      value.text.isEmpty
+                                      ? const SizedBox.shrink()
+                                      : IconButton(
+                                          tooltip: 'Suche leeren',
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            setState(() => _searchQuery = '');
+                                          },
+                                          icon: const Icon(Icons.clear_rounded),
+                                        ),
+                                ),
+                            filled: true,
+                            fillColor: GarantieHeldApp.surfaceFor(context),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 15,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: GarantieHeldApp.emerald,
+                                width: 1.4,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'Deine Garantien',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            query.isEmpty
-                                ? '${warranties.length} gesamt'
-                                : '${filteredWarranties.length} Treffer',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.58),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      if (warranties.isEmpty)
-                        const _EmptyState()
-                      else if (filteredWarranties.isEmpty)
-                        const _SearchEmptyState()
-                      else
-                        ...filteredWarranties.map((item) {
-                          final isDeleting = _deletingWarrantyIds.contains(item.id);
-                          return TweenAnimationBuilder<double>(
-                            key: ValueKey(item.id),
-                            tween: Tween<double>(
-                              begin: 1,
-                              end: isDeleting ? 0 : 1,
-                            ),
-                            duration: const Duration(milliseconds: 1000),
-                            curve: Curves.easeInOutCubic,
-                            builder: (context, progress, child) => ClipRect(
-                              child: Align(
-                                alignment: Alignment.topCenter,
-                                heightFactor: progress,
-                                child: Opacity(opacity: progress, child: child),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(20),
-                                onTap: isDeleting
-                                    ? null
-                                    : () => _openWarrantyDetails(item),
-                                child: _WarrantyCard(
-                                  warranty: item,
-                                  price: _currency.format(item.price),
-                                  purchaseDate: _date.format(item.purchaseDate),
-                                  onShare: () => _shareWarrantyData(context, item),
-                                  onDetails: () => _openWarrantyDetails(item),
-                                  onEdit: () => _editWarrantyFromCard(item),
-                                  onDelete: () => _deleteWarrantyFromCard(item),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Deine Garantien',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
-                          );
-                        }),
-                    ],
+                            InkWell(
+                              onTap: _showSortOptions,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 11,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF334155),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Sortieren',
+                                      style: TextStyle(
+                                        color: Color(0xFFE2E8F0),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      size: 16,
+                                      color: Color(0xFFE2E8F0),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        if (warranties.isEmpty)
+                          const _EmptyState()
+                        else if (filteredWarranties.isEmpty)
+                          const _SearchEmptyState()
+                        else
+                          ...filteredWarranties.map((item) {
+                            final isDeleting = _deletingWarrantyIds.contains(
+                              item.id,
+                            );
+                            return TweenAnimationBuilder<double>(
+                              key: ValueKey(item.id),
+                              tween: Tween<double>(
+                                begin: 1,
+                                end: isDeleting ? 0 : 1,
+                              ),
+                              duration: const Duration(milliseconds: 1000),
+                              curve: Curves.easeInOutCubic,
+                              builder: (context, progress, child) => ClipRect(
+                                child: Align(
+                                  alignment: Alignment.topCenter,
+                                  heightFactor: progress,
+                                  child: Opacity(
+                                    opacity: progress,
+                                    child: child,
+                                  ),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(20),
+                                  onTap: isDeleting
+                                      ? null
+                                      : () => _openWarrantyDetails(item),
+                                  child: _WarrantyCard(
+                                    warranty: item,
+                                    price: _currency.format(item.price),
+                                    purchaseDate: _date.format(
+                                      item.purchaseDate,
+                                    ),
+                                    onShare: () =>
+                                        _shareWarrantyData(context, item),
+                                    onDetails: () => _openWarrantyDetails(item),
+                                    onPreview: () =>
+                                        _previewWarrantyReceipt(item),
+                                    onEdit: () => _editWarrantyFromCard(item),
+                                    onDelete: () =>
+                                        _deleteWarrantyFromCard(item),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-      bottomNavigationBar: Stack(
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          GarantieHeldApp.background.withValues(alpha: 0.82),
-                          GarantieHeldApp.background,
-                        ],
-                        stops: const [0, 0.38, 1],
+                ],
+              ),
+            );
+          },
+        ),
+        bottomNavigationBar: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            GarantieHeldApp.background.withValues(alpha: 0.82),
+                            GarantieHeldApp.background,
+                          ],
+                          stops: const [0, 0.38, 1],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              child: PrimaryButton(
-                label: 'Bon scannen',
-                icon: Icons.document_scanner_outlined,
-                onPressed: _addWarranty,
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                child: PrimaryButton(
+                  label: 'Bon scannen',
+                  icon: Icons.document_scanner_outlined,
+                  onPressed: _addWarranty,
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -661,31 +954,43 @@ class _BonKeeprInfoSheet extends StatelessWidget {
                     children: [
                       _InfoFeature(
                         icon: Icons.auto_awesome_rounded,
-                        text: 'KI-Erkennung: Fotografiere deinen Beleg – Händler, Preis & Datum werden automatisch erfasst.',
+                        text:
+                            'KI-Erkennung: Fotografiere deinen Beleg – Händler, Preis & Datum werden automatisch erfasst.',
                       ),
                       _InfoFeature(
                         icon: Icons.edit_note_rounded,
-                        text: 'Manuelle Eingabe & Datenschutz: Kein KI-Fan? Du kannst alle Belege und Garantien auch vollständig manuell erfassen. Es werden dann keinerlei Daten an eine KI gesendet.',
+                        text:
+                            'Manuelle Eingabe & Datenschutz: Kein KI-Fan? Du kannst alle Belege und Garantien auch vollständig manuell erfassen. Es werden dann keinerlei Daten an eine KI gesendet.',
                       ),
                       _InfoFeature(
                         icon: Icons.schedule_rounded,
-                        text: 'Garantie-Scanner: Behalte die Ablaufdaten deiner Geräte immer im Blick.',
+                        text:
+                            'Garantie-Scanner: Behalte die Ablaufdaten deiner Geräte immer im Blick.',
                       ),
                       _InfoFeature(
                         icon: Icons.lock_outline_rounded,
-                        text: '100% Datensicherheit: Deine Daten gehören dir. Standardmäßig komplett lokale Speicherung auf deinem Gerät.',
+                        text:
+                            '100% Datensicherheit: Deine Daten gehören dir. Standardmäßig komplett lokale Speicherung auf deinem Gerät.',
                       ),
                       _InfoFeature(
                         icon: Icons.import_export_rounded,
-                        text: 'Offline Import/Export: Sichere deine Daten jederzeit als CSV oder exportiere Belege offline.',
+                        text:
+                            'Offline Import/Export: Sichere deine Daten jederzeit als CSV oder exportiere Belege offline.',
                       ),
                       _InfoFeature(
                         icon: Icons.cloud_outlined,
-                        text: 'Cloud-Backup (Optional): Die verschlüsselte Google-Drive-Sicherung ist in Vorbereitung.',
+                        text:
+                            'Cloud-Backup (Optional): Die verschlüsselte Google-Drive-Sicherung ist in Vorbereitung.',
                       ),
                       _InfoFeature(
                         icon: Icons.share_outlined,
-                        text: 'Belege teilen: Sende Garantiedaten und Kassenbon-Fotos direkt per WhatsApp, Mail & Co. an Partner oder den Support.',
+                        text:
+                            'Belege teilen: Sende Garantiedaten und Kassenbon-Fotos direkt per WhatsApp, Mail & Co. an Partner oder den Support.',
+                      ),
+                      _InfoFeature(
+                        icon: Icons.policy_outlined,
+                        text:
+                            'Versicherungs-Schutz: Erstelle in den Einstellungen jederzeit einen professionellen PDF-Versicherungs-Report deiner Garantien inklusive aller Belege und Seriennummern – ideal für Schadensfälle oder Hausratversicherungen.',
                       ),
                     ],
                   ),
@@ -788,6 +1093,7 @@ class WarrantyDetailPage extends StatefulWidget {
 
 class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
   bool _busy = false;
+  int _receiptIndex = 0;
 
   Future<void> _editWarranty() async {
     final warranty = widget.warranty;
@@ -820,7 +1126,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: GarantieHeldApp.surface,
         title: const Text('Garantie wirklich löschen?'),
-        content: const Text('Diese Aktion kann nicht rückgängig gemacht werden.'),
+        content: const Text(
+          'Diese Aktion kann nicht rückgängig gemacht werden.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -828,7 +1136,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFF87171)),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFF87171),
+            ),
             child: const Text('Löschen'),
           ),
         ],
@@ -837,9 +1147,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
     if (confirmed != true || !mounted) return;
     await DatabaseHelper.instance.deleteWarranty(widget.warranty.id);
     if (!mounted) return;
-    Navigator.of(context).pop(
-      WarrantyDetailResult(deletedWarrantyId: widget.warranty.id),
-    );
+    Navigator.of(
+      context,
+    ).pop(WarrantyDetailResult(deletedWarrantyId: widget.warranty.id));
   }
 
   Future<void> _shareWarranty() async {
@@ -948,14 +1258,14 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) =>
           FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.82, end: 1).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.82, end: 1).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+              ),
+              child: child,
+            ),
           ),
-          child: child,
-        ),
-      ),
     );
     await Future<void>.delayed(const Duration(milliseconds: 1500));
     if (mounted && overlayRoute?.isCurrent == true) navigator.pop();
@@ -964,12 +1274,18 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _showReceiptFullscreen() async {
-    final imagePath = widget.warranty.imagePath;
-    if (imagePath.isEmpty) return;
+  Future<void> _showReceiptFullscreen([String? selectedPath]) async {
+    final receiptPaths = widget.warranty.allReceiptPaths.take(3).toList();
+    if (receiptPaths.isEmpty) return;
+    final initialIndex = selectedPath == null
+        ? _receiptIndex.clamp(0, receiptPaths.length - 1)
+        : receiptPaths.indexOf(selectedPath).clamp(0, receiptPaths.length - 1);
+    final imagePath = receiptPaths.isEmpty ? '' : receiptPaths[initialIndex];
     if (_isPdfPath(imagePath)) {
       await OpenFilex.open(imagePath);
       return;
@@ -990,19 +1306,35 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
               icon: const Icon(Icons.close),
             ),
           ),
-          body: InteractiveViewer(
-            minScale: 1,
-            maxScale: 6,
-            child: Center(
-              child: Image.file(
-                File(imagePath),
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Text(
-                  'Belegfoto nicht verfügbar',
-                  style: TextStyle(color: Colors.white),
+          body: PageView.builder(
+            controller: PageController(initialPage: initialIndex),
+            itemCount: receiptPaths.length,
+            itemBuilder: (context, index) {
+              final mediaPath = receiptPaths[index];
+              if (_isPdfPath(mediaPath)) {
+                return Center(
+                  child: TextButton.icon(
+                    onPressed: () => OpenFilex.open(mediaPath),
+                    icon: const Icon(Icons.picture_as_pdf_rounded),
+                    label: const Text('PDF mit Standard-App öffnen'),
+                  ),
+                );
+              }
+              return InteractiveViewer(
+                minScale: 1,
+                maxScale: 6,
+                child: Center(
+                  child: Image.file(
+                    File(mediaPath),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Text(
+                      'Belegfoto nicht verfügbar',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -1012,10 +1344,20 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
   @override
   Widget build(BuildContext context) {
     final warranty = widget.warranty;
-    final date = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.purchaseDate);
-    final price = NumberFormat.currency(locale: 'de_DE', symbol: '€').format(warranty.price);
+    final receiptPaths = warranty.allReceiptPaths.take(3).toList();
+    final receiptPath = receiptPaths.isEmpty
+        ? ''
+        : receiptPaths[_receiptIndex.clamp(0, receiptPaths.length - 1)];
+    final date = DateFormat(
+      'dd.MM.yyyy',
+      'de_DE',
+    ).format(warranty.purchaseDate);
+    final price = NumberFormat.currency(
+      locale: 'de_DE',
+      symbol: '€',
+    ).format(warranty.price);
     return Scaffold(
-      backgroundColor: GarantieHeldApp.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           warranty.title,
@@ -1023,7 +1365,7 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        backgroundColor: GarantieHeldApp.background,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         actions: [
           IconButton(
             tooltip: 'Beleg teilen',
@@ -1036,14 +1378,14 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
-          if (warranty.imagePath.isNotEmpty) ...[
+          if (receiptPath.isNotEmpty) ...[
             Stack(
               children: [
                 GestureDetector(
                   onTap: _showReceiptFullscreen,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
-                    child: _isPdfPath(warranty.imagePath)
+                    child: _isPdfPath(receiptPath)
                         ? Container(
                             height: 180,
                             width: double.infinity,
@@ -1065,18 +1407,20 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                             ),
                           )
                         : Image.file(
-                            File(warranty.imagePath),
+                            File(receiptPath),
                             height: 240,
                             width: double.infinity,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => const SizedBox(
                               height: 120,
-                              child: Center(child: Text('Belegfoto nicht verfügbar')),
+                              child: Center(
+                                child: Text('Belegfoto nicht verfügbar'),
+                              ),
                             ),
                           ),
                   ),
                 ),
-                if (!_isPdfPath(warranty.imagePath))
+                if (!_isPdfPath(receiptPath))
                   Positioned(
                     right: 12,
                     bottom: 12,
@@ -1106,12 +1450,18 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         child: Text(
-                          _isPdfPath(warranty.imagePath)
+                          _isPdfPath(receiptPath)
                               ? 'Tippen zum Öffnen'
                               : 'Tippen zum Vergrößern',
-                          style: const TextStyle(color: Colors.white, fontSize: 11),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ),
@@ -1119,6 +1469,42 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                 ),
               ],
             ),
+            if (receiptPaths.length > 1) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 62,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: receiptPaths.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) => GestureDetector(
+                    onTap: () => setState(() => _receiptIndex = index),
+                    child: Container(
+                      width: 62,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: index == _receiptIndex
+                              ? GarantieHeldApp.emerald
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: _isPdfPath(receiptPaths[index])
+                          ? const Icon(
+                              Icons.picture_as_pdf_rounded,
+                              color: Color(0xFFF87171),
+                            )
+                          : Image.file(
+                              File(receiptPaths[index]),
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
           ],
           Row(
@@ -1127,7 +1513,10 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
               Expanded(
                 child: Text(
                   warranty.title,
-                  style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1135,12 +1524,32 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
             ],
           ),
           const SizedBox(height: 18),
-          _WarrantyDetailTile(label: 'Händler', value: warranty.storeName.isEmpty ? '—' : warranty.storeName),
+          _WarrantyDetailTile(
+            label: 'Händler',
+            value: warranty.storeName.isEmpty ? '—' : warranty.storeName,
+          ),
           _WarrantyDetailTile(label: 'Kaufpreis', value: price),
           _WarrantyDetailTile(label: 'Kaufdatum', value: date),
-          _WarrantyDetailTile(label: 'Kategorie', value: _categoryLabel(warranty.category)),
-          _WarrantyDetailTile(label: 'Garantielaufzeit', value: warranty.durationLabel),
-          _WarrantyDetailTile(label: 'Garantieende', value: DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.expirationDate)),
+          _WarrantyDetailTile(
+            label: 'Kategorie',
+            value: _categoryLabel(warranty.category),
+          ),
+          _WarrantyDetailTile(
+            label: 'Garantielaufzeit',
+            value: warranty.durationLabel,
+          ),
+          _WarrantyDetailTile(
+            label: 'Garantieende',
+            value: DateFormat(
+              'dd.MM.yyyy',
+              'de_DE',
+            ).format(warranty.expirationDate),
+          ),
+          if (warranty.serialNumber?.trim().isNotEmpty == true)
+            _WarrantyDetailTile(
+              label: 'Seriennummer / SN',
+              value: warranty.serialNumber!.trim(),
+            ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -1185,17 +1594,28 @@ class _WarrantyDetailTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: GarantieHeldApp.surface,
+        color: GarantieHeldApp.surfaceFor(context),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.62))),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.62),
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Flexible(
-            child: Text(value, textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.w700)),
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -1251,7 +1671,10 @@ class _WarrantyStatusBadgeState extends State<_WarrantyStatusBadge>
                   color: color,
                   shape: BoxShape.circle,
                   boxShadow: [
-                    BoxShadow(color: color.withValues(alpha: 0.75), blurRadius: 6),
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.75),
+                      blurRadius: 6,
+                    ),
                   ],
                 ),
               ),
@@ -1272,16 +1695,17 @@ class _WarrantyStatusBadgeState extends State<_WarrantyStatusBadge>
   }
 }
 
-bool _isPdfPath(String filePath) => path.extension(filePath).toLowerCase() == '.pdf';
+bool _isPdfPath(String filePath) =>
+    path.extension(filePath).toLowerCase() == '.pdf';
 
 String _categoryLabel(Category category) => switch (category) {
-      Category.elektronik => 'Elektronik',
-      Category.haushalt => 'Haushalt',
-      Category.moebel => 'Möbel',
-      Category.werkzeug => 'Werkzeug',
-      Category.kleidung => 'Kleidung',
-      Category.sonstiges => 'Sonstiges',
-    };
+  Category.elektronik => 'Elektronik',
+  Category.haushalt => 'Haushalt',
+  Category.moebel => 'Möbel',
+  Category.werkzeug => 'Werkzeug',
+  Category.kleidung => 'Kleidung',
+  Category.sonstiges => 'Sonstiges',
+};
 
 class _ProtectedValueCard extends StatelessWidget {
   const _ProtectedValueCard({
@@ -1346,7 +1770,10 @@ class _ProtectedValueCard extends StatelessWidget {
             spacing: 9,
             runSpacing: 8,
             children: [
-              _CountBadge(icon: Icons.shield_rounded, label: '$activeCount aktiv'),
+              _CountBadge(
+                icon: Icons.shield_rounded,
+                label: '$activeCount aktiv',
+              ),
               _CountBadge(
                 icon: Icons.schedule_rounded,
                 label: '$expiringCount laufen bald ab',
@@ -1392,6 +1819,7 @@ class _WarrantyCard extends StatelessWidget {
     required this.purchaseDate,
     required this.onShare,
     required this.onDetails,
+    required this.onPreview,
     required this.onEdit,
     required this.onDelete,
   });
@@ -1401,6 +1829,7 @@ class _WarrantyCard extends StatelessWidget {
   final String purchaseDate;
   final VoidCallback onShare;
   final VoidCallback onDetails;
+  final VoidCallback onPreview;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -1422,21 +1851,25 @@ class _WarrantyCard extends StatelessWidget {
     final statusColor = criticalExpiry
         ? Colors.redAccent
         : nearingExpiry
-            ? const Color(0xFFF97316)
-            : GarantieHeldApp.emerald;
+        ? const Color(0xFFF97316)
+        : GarantieHeldApp.emerald;
     final status = expired
         ? 'Abgelaufen'
         : remainingDays == 0
-            ? 'Achtung: Noch heute'
-            : nearingExpiry
-                ? 'Achtung: Noch $remainingDays Tage'
-                : 'Noch $remainingDays Tage';
+        ? 'Achtung: Noch heute'
+        : nearingExpiry
+        ? 'Achtung: Noch $remainingDays Tage'
+        : 'Noch $remainingDays Tage';
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
-        color: GarantieHeldApp.surface,
+        color: GarantieHeldApp.surfaceFor(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.06),
+        ),
       ),
       child: Row(
         children: [
@@ -1444,7 +1877,7 @@ class _WarrantyCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: GarantieHeldApp.surface,
+              color: GarantieHeldApp.surfaceFor(context),
               borderRadius: BorderRadius.circular(15),
               boxShadow: [
                 BoxShadow(
@@ -1468,7 +1901,10 @@ class _WarrantyCard extends StatelessWidget {
                   warranty.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1476,18 +1912,26 @@ class _WarrantyCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.56),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.58),
                     fontSize: 12,
                   ),
                 ),
                 const SizedBox(height: 9),
                 Row(
                   children: [
-                    Text(price, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(
+                      price,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                     const SizedBox(width: 9),
                     Flexible(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: criticalExpiry
                               ? Colors.red.withValues(alpha: 0.2)
@@ -1513,9 +1957,9 @@ class _WarrantyCard extends StatelessWidget {
           ),
           const SizedBox(width: 7),
           InkWell(
-            onTap: onDetails,
+            onTap: onPreview,
             borderRadius: BorderRadius.circular(10),
-            child: _receiptThumbnail(),
+            child: _receiptThumbnail(context),
           ),
           const SizedBox(width: 6),
           Padding(
@@ -1525,38 +1969,38 @@ class _WarrantyCard extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _CardQuickAction(
-                      tooltip: 'Teilen',
-                      icon: Icons.share_outlined,
-                      onTap: onShare,
-                    ),
-                    _CardQuickAction(
-                      tooltip: 'Details',
-                      icon: Icons.visibility_outlined,
-                      onTap: onDetails,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _CardQuickAction(
-                      tooltip: 'Bearbeiten',
-                      icon: Icons.edit_outlined,
-                      onTap: onEdit,
-                    ),
-                    _CardQuickAction(
-                      tooltip: 'Löschen',
-                      icon: Icons.delete_outline_rounded,
-                      color: const Color(0xFFF87171),
-                      onTap: onDelete,
-                    ),
-                  ],
-                ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _CardQuickAction(
+                        tooltip: 'Teilen',
+                        icon: Icons.share_outlined,
+                        onTap: onShare,
+                      ),
+                      _CardQuickAction(
+                        tooltip: 'Details',
+                        icon: Icons.visibility_outlined,
+                        onTap: onDetails,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _CardQuickAction(
+                        tooltip: 'Bearbeiten',
+                        icon: Icons.edit_outlined,
+                        onTap: onEdit,
+                      ),
+                      _CardQuickAction(
+                        tooltip: 'Löschen',
+                        icon: Icons.delete_outline_rounded,
+                        color: const Color(0xFFF87171),
+                        onTap: onDelete,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1566,7 +2010,7 @@ class _WarrantyCard extends StatelessWidget {
     );
   }
 
-  Widget _receiptThumbnail() {
+  Widget _receiptThumbnail(BuildContext context) {
     final filePath = warranty.imagePath;
     final isPdf = filePath.toLowerCase().endsWith('.pdf');
     return ClipRRect(
@@ -1575,29 +2019,53 @@ class _WarrantyCard extends StatelessWidget {
         width: 56,
         height: 56,
         child: filePath.isEmpty
-            ? const ColoredBox(
-                color: Color(0xFF0F172A),
-                child: Icon(Icons.receipt_long_outlined, color: Colors.white54, size: 24),
+            ? ColoredBox(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFFF1F5F9),
+                child: Icon(
+                  Icons.receipt_long_outlined,
+                  color: Colors.white54,
+                  size: 24,
+                ),
               )
             : isPdf
-                ? const ColoredBox(
-                    color: Color(0xFF0F172A),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFF87171), size: 25),
-                        Text('PDF', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800)),
-                      ],
+            ? ColoredBox(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFFF1F5F9),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.picture_as_pdf_rounded,
+                      color: Color(0xFFF87171),
+                      size: 25,
                     ),
-                  )
-                : Image.file(
-                    File(filePath),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const ColoredBox(
-                      color: Color(0xFF0F172A),
-                      child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 22),
+                    Text(
+                      'PDF',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
+                  ],
+                ),
+              )
+            : Image.file(
+                File(filePath),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => ColoredBox(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFF1F5F9),
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    color: Colors.white54,
+                    size: 22,
                   ),
+                ),
+              ),
       ),
     );
   }
@@ -1621,7 +2089,9 @@ class _CardQuickAction extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: const Color(0xFF0F172A),
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF0F172A)
+            : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(9),
         child: InkWell(
           onTap: onTap,
@@ -1645,7 +2115,7 @@ class _EmptyState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 34),
       decoration: BoxDecoration(
-        color: GarantieHeldApp.surface,
+        color: GarantieHeldApp.surfaceFor(context),
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
@@ -1653,7 +2123,9 @@ class _EmptyState extends StatelessWidget {
           Icon(
             Icons.receipt_long_rounded,
             size: 42,
-            color: Colors.white.withOpacity(0.55),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.55),
           ),
           const SizedBox(height: 14),
           const Text(
@@ -1664,7 +2136,11 @@ class _EmptyState extends StatelessWidget {
           Text(
             'Scanne deinen ersten Kassenbon und behalte deine Käufe im Blick.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white.withOpacity(0.58)),
+            style: TextStyle(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.58),
+            ),
           ),
         ],
       ),
@@ -1681,7 +2157,7 @@ class _SearchEmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       decoration: BoxDecoration(
-        color: GarantieHeldApp.surface,
+        color: GarantieHeldApp.surfaceFor(context),
         borderRadius: BorderRadius.circular(20),
       ),
       child: const Column(
@@ -1708,11 +2184,18 @@ class _LoadError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.storage_rounded, size: 42, color: Color(0xFFF87171)),
+            const Icon(
+              Icons.storage_rounded,
+              size: 42,
+              color: Color(0xFFF87171),
+            ),
             const SizedBox(height: 12),
             const Text('Die Garantien konnten nicht geladen werden.'),
             const SizedBox(height: 12),
-            FilledButton(onPressed: onRetry, child: const Text('Erneut versuchen')),
+            FilledButton(
+              onPressed: onRetry,
+              child: const Text('Erneut versuchen'),
+            ),
           ],
         ),
       ),
@@ -1721,11 +2204,7 @@ class _LoadError extends StatelessWidget {
 }
 
 class WarrantyFormPage extends StatefulWidget {
-  const WarrantyFormPage({
-    super.key,
-    required this.scanResult,
-    this.warranty,
-  });
+  const WarrantyFormPage({super.key, required this.scanResult, this.warranty});
 
   final ReceiptOcrResult scanResult;
   final Warranty? warranty;
@@ -1742,8 +2221,10 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   late final TextEditingController _titleController;
   final _storeController = TextEditingController();
   final _priceController = TextEditingController();
+  final _serialNumberController = TextEditingController();
   final _purchaseDateController = TextEditingController();
   late ReceiptOcrResult _scanResult;
+  final List<String> _receiptPaths = [];
   int _warrantyMonths = 24;
   int? _warrantyDays;
   int _reminderDaysBefore = 30;
@@ -1762,20 +2243,26 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     final result = widget.scanResult;
     final existing = widget.warranty;
     _scanResult = result;
-    _titleController = TextEditingController(
-      text: existing?.title ?? '',
+    _receiptPaths.addAll(
+      existing?.allReceiptPaths ??
+          (result.imagePath.isEmpty ? const [] : [result.imagePath]),
     );
+    _titleController = TextEditingController(text: existing?.title ?? '');
     _storeController.text = existing?.storeName ?? result.storeName;
+    _serialNumberController.text = existing?.serialNumber ?? '';
     final initialPrice = existing?.price ?? result.productPrice;
     _priceController.text = initialPrice == null
         ? ''
         : initialPrice.toStringAsFixed(2).replaceAll('.', ',');
-    _purchaseDate = existing?.purchaseDate ?? result.purchaseDate ?? DateTime.now();
+    _purchaseDate =
+        existing?.purchaseDate ?? result.purchaseDate ?? DateTime.now();
     _category = existing?.category ?? _categoryFromGemini(result.category);
     _warrantyMonths = existing?.warrantyMonths ?? 24;
     _warrantyDays = existing?.warrantyDays;
     _reminderDaysBefore = existing?.reminderDaysBefore ?? 30;
-    _purchaseDateController.text = DateFormat('dd.MM.yyyy').format(_purchaseDate!);
+    _purchaseDateController.text = DateFormat(
+      'dd.MM.yyyy',
+    ).format(_purchaseDate!);
     _isAnalyzing = existing == null && result.imagePath.isNotEmpty;
     if (_isAnalyzing) unawaited(_analyzeReceipt());
   }
@@ -1874,7 +2361,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     }
   }
 
-  Category _categoryFromGemini(String value) => switch (value.trim().toLowerCase()) {
+  Category _categoryFromGemini(String value) =>
+      switch (value.trim().toLowerCase()) {
         'elektronik' => Category.elektronik,
         'haushalt' => Category.haushalt,
         'möbel' || 'moebel' => Category.moebel,
@@ -1896,6 +2384,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     _titleController.dispose();
     _storeController.dispose();
     _priceController.dispose();
+    _serialNumberController.dispose();
     _purchaseDateController.dispose();
     super.dispose();
   }
@@ -1907,7 +2396,9 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       return;
     }
     final warranty = Warranty(
-      id: widget.warranty?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
+      id:
+          widget.warranty?.id ??
+          DateTime.now().microsecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       storeName: _storeController.text.trim(),
       price: double.parse(_priceController.text.trim().replaceAll(',', '.')),
@@ -1915,8 +2406,11 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       warrantyMonths: _warrantyMonths,
       warrantyDays: _warrantyDays,
       category: _category,
-      imagePath: _scanResult.imagePath,
-      serialNumber: widget.warranty?.serialNumber,
+      imagePath: _receiptPaths.isNotEmpty ? _receiptPaths.first : '',
+      receiptPaths: List<String>.unmodifiable(_receiptPaths.take(3)),
+      serialNumber: _serialNumberController.text.trim().isEmpty
+          ? null
+          : _serialNumberController.text.trim(),
       notes: widget.warranty?.notes,
       reminderDaysBefore: _reminderDaysBefore,
     );
@@ -1968,17 +2462,20 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     );
   }
 
-  Future<void> _showReceiptPreview() async {
-    final imagePath = _scanResult.imagePath;
-    if (imagePath.isEmpty) return;
-    if (_isPdfPath(imagePath)) {
-      await OpenFilex.open(imagePath);
-      return;
-    }
+  Future<void> _showReceiptPreview([String? selectedPath]) async {
+    final paths = _receiptPaths.isNotEmpty
+        ? List<String>.of(_receiptPaths)
+        : (_scanResult.imagePath.isEmpty
+              ? <String>[]
+              : [_scanResult.imagePath]);
+    if (paths.isEmpty) return;
+    final initialPage = selectedPath == null
+        ? 0
+        : paths.indexOf(selectedPath).clamp(0, paths.length - 1);
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black,
-      builder: (context) => Dialog.fullscreen(
+      builder: (dialogContext) => Dialog.fullscreen(
         child: Scaffold(
           backgroundColor: Colors.black,
           appBar: AppBar(
@@ -1987,23 +2484,32 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
             title: const Text('Kassenbon'),
             leading: IconButton(
               tooltip: 'Schließen',
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               icon: const Icon(Icons.close),
             ),
           ),
-          body: InteractiveViewer(
-            minScale: 1,
-            maxScale: 5,
-            child: Center(
-              child: Image.file(
-                File(imagePath),
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Text(
-                  'Kassenbon-Bild nicht verfügbar',
-                  style: TextStyle(color: Colors.white),
+          body: PageView.builder(
+            controller: PageController(initialPage: initialPage),
+            itemCount: paths.length,
+            itemBuilder: (context, index) {
+              final mediaPath = paths[index];
+              if (_isPdfPath(mediaPath)) {
+                return Center(
+                  child: TextButton.icon(
+                    onPressed: () => OpenFilex.open(mediaPath),
+                    icon: const Icon(Icons.picture_as_pdf_rounded),
+                    label: const Text('PDF mit Standard-App öffnen'),
+                  ),
+                );
+              }
+              return InteractiveViewer(
+                minScale: 1,
+                maxScale: 5,
+                child: Center(
+                  child: Image.file(File(mediaPath), fit: BoxFit.contain),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -2011,10 +2517,16 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   }
 
   Future<void> _chooseReceiptImage() async {
+    if (_receiptPaths.length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximal drei Belege pro Garantie.')),
+      );
+      return;
+    }
     final source = await showModalBottomSheet<_ReceiptUploadSource>(
       context: context,
       useSafeArea: true,
-      backgroundColor: GarantieHeldApp.surface,
+      backgroundColor: GarantieHeldApp.surfaceFor(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -2045,19 +2557,32 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
               ),
               const SizedBox(height: 8),
               ListTile(
-                leading: const Icon(Icons.camera_alt_rounded, color: GarantieHeldApp.emerald),
+                leading: const Icon(
+                  Icons.camera_alt_rounded,
+                  color: GarantieHeldApp.emerald,
+                ),
                 title: const Text('Foto jetzt aufnehmen'),
-                onTap: () => Navigator.of(sheetContext).pop(_ReceiptUploadSource.camera),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_ReceiptUploadSource.camera),
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library_rounded, color: GarantieHeldApp.emerald),
+                leading: const Icon(
+                  Icons.photo_library_rounded,
+                  color: GarantieHeldApp.emerald,
+                ),
                 title: const Text('Aus Galerie auswählen'),
-                onTap: () => Navigator.of(sheetContext).pop(_ReceiptUploadSource.gallery),
+                onTap: () => Navigator.of(
+                  sheetContext,
+                ).pop(_ReceiptUploadSource.gallery),
               ),
               ListTile(
-                leading: const Icon(Icons.picture_as_pdf_rounded, color: GarantieHeldApp.emerald),
+                leading: const Icon(
+                  Icons.picture_as_pdf_rounded,
+                  color: GarantieHeldApp.emerald,
+                ),
                 title: const Text('PDF auswählen'),
-                onTap: () => Navigator.of(sheetContext).pop(_ReceiptUploadSource.pdf),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_ReceiptUploadSource.pdf),
               ),
             ],
           ),
@@ -2074,12 +2599,23 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
           withData: true,
         );
         if (selection == null || selection.files.isEmpty || !mounted) return;
-        final savedPath = await _persistSelectedReceiptFile(selection.files.single);
+        final savedPath = await _persistSelectedReceiptFile(
+          selection.files.single,
+        );
         if (!mounted) return;
         _analysisGeneration++;
         _analysisRequestInProgress = false;
         setState(() {
-          _scanResult = _scanResult.copyWith(imagePath: savedPath);
+          if (_receiptPaths.length >= 3) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Maximal drei Belege pro Garantie.'),
+              ),
+            );
+            return;
+          }
+          _receiptPaths.add(savedPath);
+          _scanResult = _scanResult.copyWith(imagePath: _receiptPaths.first);
           _isAnalyzing = false;
           _analysisError = null;
         });
@@ -2095,12 +2631,21 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       final savedPath = await _persistSelectedReceiptImage(image.path);
       if (!mounted) return;
       setState(() {
-        _scanResult = _scanResult.copyWith(imagePath: savedPath);
+        if (_receiptPaths.length >= 3) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Maximal drei Belege pro Garantie.')),
+          );
+          return;
+        }
+        _receiptPaths.add(savedPath);
+        _scanResult = _scanResult.copyWith(imagePath: _receiptPaths.first);
       });
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Das Belegfoto konnte nicht geladen werden.')),
+        const SnackBar(
+          content: Text('Das Belegfoto konnte nicht geladen werden.'),
+        ),
       );
     }
   }
@@ -2132,7 +2677,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       return (await File(sourcePath).copy(destination)).path;
     }
     final bytes = selectedFile.bytes;
-    if (bytes == null) throw const FormatException('PDF-Datei ist nicht lesbar.');
+    if (bytes == null)
+      throw const FormatException('PDF-Datei ist nicht lesbar.');
     return (await File(destination).writeAsBytes(bytes, flush: true)).path;
   }
 
@@ -2173,383 +2719,521 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
             }
           },
           child: Scaffold(
-      backgroundColor: GarantieHeldApp.background,
-      appBar: AppBar(
-        backgroundColor: GarantieHeldApp.background,
-        leading: IconButton(
-          tooltip: 'Zurück',
-          onPressed: _handleBackNavigation,
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: Text(
-          isEditing ? 'Garantie bearbeiten' : 'Garantie bestätigen',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-        actions: [
-          if (!isEditing)
-            Padding(
-              padding: const EdgeInsets.only(right: 20),
-              child: Center(
-                child: Text(
-                  'Schritt 2/2',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.56),
-                    fontSize: 12,
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            appBar: AppBar(
+              backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+              leading: IconButton(
+                tooltip: 'Zurück',
+                onPressed: _handleBackNavigation,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              title: Text(
+                isEditing ? 'Garantie bearbeiten' : 'Garantie bestätigen',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              actions: [
+                if (!isEditing)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 20),
+                    child: Center(
+                      child: Text(
+                        'Schritt 2/2',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.56),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                   ),
+              ],
+              bottom: const PreferredSize(
+                preferredSize: Size.fromHeight(1),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Color(0xFF263449),
                 ),
               ),
             ),
-        ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, thickness: 1, color: Color(0xFF263449)),
-        ),
-      ),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: GarantieHeldApp.surface,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.receipt_long_rounded,
-                            color: GarantieHeldApp.emerald,
-                            size: 28,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
+            body: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'FAST GESCHAFFT!',
-                                style: TextStyle(
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: GarantieHeldApp.surfaceFor(context),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(
+                                  Icons.receipt_long_rounded,
                                   color: GarantieHeldApp.emerald,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
+                                  size: 28,
                                 ),
                               ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Dein Beleg wurde erfasst',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'FAST GESCHAFFT!',
+                                      style: TextStyle(
+                                        color: GarantieHeldApp.emerald,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Dein Beleg wurde erfasst',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    if (_scanResult.imagePath.isNotEmpty)
-                      Stack(
-                        children: [
-                          GestureDetector(
-                            onTap: _showReceiptPreview,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: _isPdfPath(_scanResult.imagePath)
-                                  ? Container(
-                                      height: 180,
-                                      width: double.infinity,
-                                      color: GarantieHeldApp.surface,
-                                      child: const Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.picture_as_pdf_rounded,
-                                            color: Color(0xFFF87171),
-                                            size: 48,
-                                          ),
-                                          SizedBox(height: 8),
-                                          Text(
-                                            'PDF-Beleg öffnen',
-                                            style: TextStyle(fontWeight: FontWeight.w700),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  : Image.file(
-                                      File(_scanResult.imagePath),
-                                      height: 180,
-                                      width: double.infinity,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        height: 180,
-                                        width: double.infinity,
-                                        alignment: Alignment.center,
-                                        color: GarantieHeldApp.surface,
-                                        child: const Text('Kassenbon-Bild nicht verfügbar'),
-                                      ),
-                                    ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 10,
-                            right: 10,
-                            child: Material(
-                              color: const Color(0xB31E293B),
-                              shape: const CircleBorder(),
-                              child: IconButton(
-                                tooltip: 'Belegdatei ändern',
-                                onPressed: _chooseReceiptImage,
-                                icon: const Icon(Icons.cameraswitch_rounded),
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      GestureDetector(
-                        onTap: _chooseReceiptImage,
-                        child: CustomPaint(
-                          foregroundPainter: _DashedReceiptBorderPainter(),
-                          child: Container(
-                            width: double.infinity,
-                            height: 180,
-                            decoration: BoxDecoration(
-                              color: GarantieHeldApp.surface,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                          const SizedBox(height: 18),
+                          if (_scanResult.imagePath.isNotEmpty)
+                            Stack(
                               children: [
-                                Icon(
-                                  Icons.add_a_photo_rounded,
-                                  color: GarantieHeldApp.emerald,
-                                  size: 34,
+                                GestureDetector(
+                                  onTap: _showReceiptPreview,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: _isPdfPath(_scanResult.imagePath)
+                                        ? Container(
+                                            height: 180,
+                                            width: double.infinity,
+                                            color: GarantieHeldApp.surface,
+                                            child: const Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.picture_as_pdf_rounded,
+                                                  color: Color(0xFFF87171),
+                                                  size: 48,
+                                                ),
+                                                SizedBox(height: 8),
+                                                Text(
+                                                  'PDF-Beleg öffnen',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        : Image.file(
+                                            File(_scanResult.imagePath),
+                                            height: 180,
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(
+                                              height: 180,
+                                              width: double.infinity,
+                                              alignment: Alignment.center,
+                                              color: GarantieHeldApp.surfaceFor(
+                                                context,
+                                              ),
+                                              child: const Text(
+                                                'Kassenbon-Bild nicht verfügbar',
+                                              ),
+                                            ),
+                                          ),
+                                  ),
                                 ),
-                                SizedBox(height: 12),
-                                Text(
-                                  'Belegfoto hinzufügen (optional)',
-                                  style: TextStyle(
-                                    color: Color(0xFFD6E0ED),
-                                    fontWeight: FontWeight.w600,
+                                Positioned(
+                                  top: 10,
+                                  right: 10,
+                                  child: Material(
+                                    color: const Color(0xB31E293B),
+                                    shape: const CircleBorder(),
+                                    child: IconButton(
+                                      tooltip: 'Belegdatei hinzufügen',
+                                      onPressed: _receiptPaths.length >= 3
+                                          ? null
+                                          : _chooseReceiptImage,
+                                      icon: const Icon(Icons.add_rounded),
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ],
+                            )
+                          else
+                            GestureDetector(
+                              onTap: _chooseReceiptImage,
+                              child: CustomPaint(
+                                foregroundPainter:
+                                    _DashedReceiptBorderPainter(),
+                                child: Container(
+                                  width: double.infinity,
+                                  height: 180,
+                                  decoration: BoxDecoration(
+                                    color: GarantieHeldApp.surfaceFor(context),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.add_a_photo_rounded,
+                                        color: GarantieHeldApp.emerald,
+                                        size: 34,
+                                      ),
+                                      SizedBox(height: 12),
+                                      Text(
+                                        'Belegfoto hinzufügen (optional)',
+                                        style: TextStyle(
+                                          color: Color(0xFFD6E0ED),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
-                    if (_scanResult.imagePath.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Center(
-                        child: Text(
-                          _isPdfPath(_scanResult.imagePath)
-                              ? 'Tippen zum Öffnen'
-                              : 'Tippen zum Vergrößern',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.52),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    if (_analysisError != null) ...[
-                      _GeminiAnalysisErrorCard(message: _analysisError!),
-                      const SizedBox(height: 16),
-                    ],
-                    const _WizardFieldLabel('Produktname'),
-                    TextFormField(
-                      controller: _titleController,
-                      autofocus: !_isAnalyzing && _titleController.text.isEmpty,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: _wizardInputDecoration(
-                        hintText: 'z. B. MOBILE ENERGIESTATION',
-                        suffixIcon: _clearButton(_titleController),
-                      ),
-                      validator: (value) => value == null || value.trim().isEmpty
-                          ? 'Bitte Produktname eingeben'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final sideBySide = constraints.maxWidth >= 560;
-                        final storeField = Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _WizardFieldLabel('Händler'),
-                            TextFormField(
-                              controller: _storeController,
-                              textCapitalization: TextCapitalization.words,
-                              decoration: _wizardInputDecoration(
-                                hintText: 'Händlername',
-                                suffixIcon: _clearButton(_storeController),
+                          if (_receiptPaths.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              height: 66,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _receiptPaths.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(width: 8),
+                                itemBuilder: (context, index) {
+                                  final receiptPath = _receiptPaths[index];
+                                  return Stack(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () =>
+                                            _showReceiptPreview(receiptPath),
+                                        child: Container(
+                                          width: 62,
+                                          height: 62,
+                                          decoration: BoxDecoration(
+                                            color: GarantieHeldApp.surfaceFor(
+                                              context,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: _isPdfPath(receiptPath)
+                                              ? const Icon(
+                                                  Icons.picture_as_pdf_rounded,
+                                                  color: Color(0xFFF87171),
+                                                  size: 30,
+                                                )
+                                              : Image.file(
+                                                  File(receiptPath),
+                                                  fit: BoxFit.cover,
+                                                ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 0,
+                                        right: 0,
+                                        child: InkWell(
+                                          onTap: () => setState(() {
+                                            _receiptPaths.removeAt(index);
+                                            _scanResult = _scanResult.copyWith(
+                                              imagePath: _receiptPaths.isEmpty
+                                                  ? ''
+                                                  : _receiptPaths.first,
+                                            );
+                                          }),
+                                          child: const Icon(
+                                            Icons.cancel,
+                                            size: 18,
+                                            color: Color(0xFFF87171),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                             ),
                           ],
-                        );
-                        final priceField = Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _WizardFieldLabel('Kaufpreis (€)'),
-                            TextFormField(
-                              controller: _priceController,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true,
+                          if (_scanResult.imagePath.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Center(
+                              child: Text(
+                                _isPdfPath(_scanResult.imagePath)
+                                    ? 'Tippen zum Öffnen'
+                                    : 'Tippen zum Vergrößern',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.52),
+                                  fontSize: 12,
+                                ),
                               ),
-                              decoration: _wizardInputDecoration(
-                                hintText: '0,00',
-                                suffixIcon: _clearButton(_priceController),
-                              ),
-                              validator: (value) {
-                                final parsed = double.tryParse(
-                                  (value ?? '').trim().replaceAll(',', '.'),
-                                );
-                                return parsed == null ||
-                                        !parsed.isFinite ||
-                                        parsed < 0
-                                    ? 'Ungültiger Preis'
-                                    : null;
-                              },
                             ),
                           ],
-                        );
-                        if (sideBySide) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: storeField),
-                              const SizedBox(width: 14),
-                              Expanded(child: priceField),
-                            ],
-                          );
-                        }
-                        return Column(
-                          children: [
-                            storeField,
+                          const SizedBox(height: 20),
+                          if (_analysisError != null) ...[
+                            _GeminiAnalysisErrorCard(message: _analysisError!),
                             const SizedBox(height: 16),
-                            priceField,
                           ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    const _WizardFieldLabel('Kaufdatum'),
-                    TextFormField(
-                      controller: _purchaseDateController,
-                      readOnly: true,
-                      onTap: _selectPurchaseDate,
-                      decoration: _wizardInputDecoration(
-                        hintText: 'Datum auswählen',
-                        errorText: _dateError ? 'Bitte Kaufdatum auswählen' : null,
-                        suffixIcon: _purchaseDateActions(),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    const _WizardFieldLabel('Garantie-Laufzeit'),
-                    const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final choice in durationChoices.take(6)) ...[
-                            _WarrantyDurationPill(
-                              label: choice.label,
-                              selected: _durationMatches(choice),
-                              onTap: () => setState(() => _selectDuration(choice)),
+                          const _WizardFieldLabel('Produktname'),
+                          TextFormField(
+                            controller: _titleController,
+                            autofocus:
+                                !_isAnalyzing && _titleController.text.isEmpty,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: _wizardInputDecoration(
+                              hintText: 'z. B. MOBILE ENERGIESTATION',
+                              suffixIcon: _clearButton(_titleController),
                             ),
-                            if (choice != durationChoices.take(6).last)
-                              const SizedBox(width: 10),
-                          ],
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                ? 'Bitte Produktname eingeben'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final sideBySide = constraints.maxWidth >= 560;
+                              final storeField = Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const _WizardFieldLabel('Händler'),
+                                  TextFormField(
+                                    controller: _storeController,
+                                    textCapitalization:
+                                        TextCapitalization.words,
+                                    decoration: _wizardInputDecoration(
+                                      hintText: 'Händlername',
+                                      suffixIcon: _clearButton(
+                                        _storeController,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                              final priceField = Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const _WizardFieldLabel('Kaufpreis (€)'),
+                                  TextFormField(
+                                    controller: _priceController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    decoration: _wizardInputDecoration(
+                                      hintText: '0,00',
+                                      suffixIcon: _clearButton(
+                                        _priceController,
+                                      ),
+                                    ),
+                                    validator: (value) {
+                                      final parsed = double.tryParse(
+                                        (value ?? '').trim().replaceAll(
+                                          ',',
+                                          '.',
+                                        ),
+                                      );
+                                      return parsed == null ||
+                                              !parsed.isFinite ||
+                                              parsed < 0
+                                          ? 'Ungültiger Preis'
+                                          : null;
+                                    },
+                                  ),
+                                ],
+                              );
+                              if (sideBySide) {
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: storeField),
+                                    const SizedBox(width: 14),
+                                    Expanded(child: priceField),
+                                  ],
+                                );
+                              }
+                              return Column(
+                                children: [
+                                  storeField,
+                                  const SizedBox(height: 16),
+                                  priceField,
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          const _WizardFieldLabel(
+                            'Seriennummer / SN (optional)',
+                          ),
+                          TextFormField(
+                            controller: _serialNumberController,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: _wizardInputDecoration(
+                              hintText: 'z. B. SN123456789',
+                              suffixIcon: _clearButton(_serialNumberController),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const _WizardFieldLabel('Kaufdatum'),
+                          TextFormField(
+                            controller: _purchaseDateController,
+                            readOnly: true,
+                            onTap: _selectPurchaseDate,
+                            decoration: _wizardInputDecoration(
+                              hintText: 'Datum auswählen',
+                              errorText: _dateError
+                                  ? 'Bitte Kaufdatum auswählen'
+                                  : null,
+                              suffixIcon: _purchaseDateActions(),
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          const _WizardFieldLabel('Garantie-Laufzeit'),
+                          const SizedBox(height: 10),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                for (final choice in durationChoices.take(
+                                  6,
+                                )) ...[
+                                  _WarrantyDurationPill(
+                                    label: choice.label,
+                                    selected: _durationMatches(choice),
+                                    onTap: () =>
+                                        setState(() => _selectDuration(choice)),
+                                  ),
+                                  if (choice != durationChoices.take(6).last)
+                                    const SizedBox(width: 10),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const _WizardFieldLabel('Garantie-Kategorie'),
+                          DropdownButtonFormField<Category>(
+                            value: _category,
+                            decoration: _wizardInputDecoration(
+                              hintText: 'Kategorie auswählen',
+                            ),
+                            items: Category.values
+                                .map(
+                                  (category) => DropdownMenuItem(
+                                    value: category,
+                                    child: Text(_categoryLabel(category)),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _category = value ?? _category),
+                          ),
+                          const SizedBox(height: 16),
+                          const _WizardFieldLabel('Weitere Laufzeit'),
+                          DropdownButtonFormField<_WarrantyDurationChoice>(
+                            value: durationChoices.firstWhere(_durationMatches),
+                            decoration: _wizardInputDecoration(
+                              hintText: 'Laufzeit auswählen',
+                            ),
+                            items: durationChoices
+                                .map(
+                                  (choice) => DropdownMenuItem(
+                                    value: choice,
+                                    child: Text(choice.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null)
+                                setState(() => _selectDuration(value));
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          const _WizardFieldLabel('Erinnerung planen'),
+                          DropdownButtonFormField<int>(
+                            value: _reminderDaysBefore,
+                            decoration: _wizardInputDecoration(
+                              hintText: 'Erinnerung auswählen',
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 0,
+                                child: Text('Am Tag des Ablaufs'),
+                              ),
+                              DropdownMenuItem(
+                                value: 7,
+                                child: Text('1 Woche vorher'),
+                              ),
+                              DropdownMenuItem(
+                                value: 14,
+                                child: Text('2 Wochen vorher'),
+                              ),
+                              DropdownMenuItem(
+                                value: 30,
+                                child: Text('1 Monat vorher'),
+                              ),
+                              DropdownMenuItem(
+                                value: -1,
+                                child: Text('Keine Erinnerung'),
+                              ),
+                            ],
+                            onChanged: (value) => setState(
+                              () => _reminderDaysBefore =
+                                  value ?? _reminderDaysBefore,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    const _WizardFieldLabel('Garantie-Kategorie'),
-                    DropdownButtonFormField<Category>(
-                      value: _category,
-                      decoration: _wizardInputDecoration(
-                        hintText: 'Kategorie auswählen',
+                  ),
+                  SafeArea(
+                    top: false,
+                    bottom: true,
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: 16,
+                        left: 16,
+                        right: 16,
                       ),
-                      items: Category.values
-                          .map((category) => DropdownMenuItem(
-                                value: category,
-                                child: Text(_categoryLabel(category)),
-                              ))
-                          .toList(),
-                      onChanged: (value) =>
-                          setState(() => _category = value ?? _category),
-                    ),
-                    const SizedBox(height: 16),
-                    const _WizardFieldLabel('Weitere Laufzeit'),
-                    DropdownButtonFormField<_WarrantyDurationChoice>(
-                      value: durationChoices.firstWhere(_durationMatches),
-                      decoration: _wizardInputDecoration(
-                        hintText: 'Laufzeit auswählen',
-                      ),
-                      items: durationChoices
-                          .map((choice) => DropdownMenuItem(
-                                value: choice,
-                                child: Text(choice.label),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) setState(() => _selectDuration(value));
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    const _WizardFieldLabel('Erinnerung planen'),
-                    DropdownButtonFormField<int>(
-                      value: _reminderDaysBefore,
-                      decoration: _wizardInputDecoration(
-                        hintText: 'Erinnerung auswählen',
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 0, child: Text('Am Tag des Ablaufs')),
-                        DropdownMenuItem(value: 7, child: Text('1 Woche vorher')),
-                        DropdownMenuItem(value: 14, child: Text('2 Wochen vorher')),
-                        DropdownMenuItem(value: 30, child: Text('1 Monat vorher')),
-                        DropdownMenuItem(value: -1, child: Text('Keine Erinnerung')),
-                      ],
-                      onChanged: (value) => setState(
-                        () => _reminderDaysBefore = value ?? _reminderDaysBefore,
+                      child: PrimaryButton(
+                        label: widget.warranty == null
+                            ? 'GARANTIE JETZT SICHERN'
+                            : 'ÄNDERUNGEN SPEICHERN',
+                        icon: Icons.shield_rounded,
+                        onPressed: _isAnalyzing ? null : _save,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            SafeArea(
-              top: false,
-              bottom: true,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
-                child: PrimaryButton(
-                  label: widget.warranty == null
-                      ? 'GARANTIE JETZT SICHERN'
-                      : 'ÄNDERUNGEN SPEICHERN',
-                  icon: Icons.shield_rounded,
-                  onPressed: _isAnalyzing ? null : _save,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
           ),
         ),
         Positioned.fill(
@@ -2585,49 +3269,50 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     Widget? suffixIcon,
     String? errorText,
   }) => InputDecoration(
-        hintText: hintText,
-        errorText: errorText,
-        filled: true,
-        fillColor: GarantieHeldApp.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        suffixIcon: suffixIcon,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF334155)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF334155)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: GarantieHeldApp.emerald, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFF87171)),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFF87171), width: 1.5),
-        ),
-      );
+    hintText: hintText,
+    errorText: errorText,
+    filled: true,
+    fillColor: GarantieHeldApp.surfaceFor(context),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    suffixIcon: suffixIcon,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFF334155)),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFF334155)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: GarantieHeldApp.emerald, width: 1.5),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFFF87171)),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFFF87171), width: 1.5),
+    ),
+  );
 
   String _categoryLabel(Category category) => switch (category) {
-        Category.elektronik => 'Elektronik',
-        Category.haushalt => 'Haushalt',
-        Category.moebel => 'Möbel',
-        Category.werkzeug => 'Werkzeug',
-        Category.kleidung => 'Kleidung',
-        Category.sonstiges => 'Sonstiges',
-      };
+    Category.elektronik => 'Elektronik',
+    Category.haushalt => 'Haushalt',
+    Category.moebel => 'Möbel',
+    Category.werkzeug => 'Werkzeug',
+    Category.kleidung => 'Kleidung',
+    Category.sonstiges => 'Sonstiges',
+  };
 }
 
 class _ReceiptAnalysisOverlay extends StatefulWidget {
   const _ReceiptAnalysisOverlay({super.key});
 
   @override
-  State<_ReceiptAnalysisOverlay> createState() => _ReceiptAnalysisOverlayState();
+  State<_ReceiptAnalysisOverlay> createState() =>
+      _ReceiptAnalysisOverlayState();
 }
 
 class _ReceiptAnalysisOverlayState extends State<_ReceiptAnalysisOverlay>
@@ -2640,8 +3325,10 @@ class _ReceiptAnalysisOverlayState extends State<_ReceiptAnalysisOverlay>
     vsync: this,
     duration: const Duration(milliseconds: 1200),
   )..repeat(reverse: true);
-  late final Animation<double> _pulse = Tween<double>(begin: 0.96, end: 1.04)
-      .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+  late final Animation<double> _pulse = Tween<double>(
+    begin: 0.96,
+    end: 1.04,
+  ).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
   late final Timer _badgeTimer;
   int _visibleBadgeCount = 0;
 
@@ -2754,17 +3441,26 @@ class _ReceiptAnalysisOverlayState extends State<_ReceiptAnalysisOverlay>
                             Positioned(
                               left: 0,
                               top: 48,
-                              child: _successBadge('Händler', _visibleBadgeCount >= 1),
+                              child: _successBadge(
+                                'Händler',
+                                _visibleBadgeCount >= 1,
+                              ),
                             ),
                             Positioned(
                               right: 0,
                               top: 76,
-                              child: _successBadge('Kaufpreis', _visibleBadgeCount >= 2),
+                              child: _successBadge(
+                                'Kaufpreis',
+                                _visibleBadgeCount >= 2,
+                              ),
                             ),
                             Positioned(
                               left: 28,
                               bottom: 34,
-                              child: _successBadge('Datum', _visibleBadgeCount >= 3),
+                              child: _successBadge(
+                                'Datum',
+                                _visibleBadgeCount >= 3,
+                              ),
                             ),
                             AnimatedBuilder(
                               animation: _pulse,
@@ -2791,17 +3487,23 @@ class _ReceiptAnalysisOverlayState extends State<_ReceiptAnalysisOverlay>
                                     stops: [0, 0.35, 0.72, 1],
                                   ),
                                   border: Border.all(
-                                    color: const Color(0xFF6EE7B7).withValues(alpha: 0.78),
+                                    color: const Color(
+                                      0xFF6EE7B7,
+                                    ).withValues(alpha: 0.78),
                                     width: 1.5,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: GarantieHeldApp.emerald.withValues(alpha: 0.5),
+                                      color: GarantieHeldApp.emerald.withValues(
+                                        alpha: 0.5,
+                                      ),
                                       blurRadius: 46,
                                       spreadRadius: 7,
                                     ),
                                     BoxShadow(
-                                      color: const Color(0xFF2DD4BF).withValues(alpha: 0.28),
+                                      color: const Color(
+                                        0xFF2DD4BF,
+                                      ).withValues(alpha: 0.28),
                                       blurRadius: 72,
                                       spreadRadius: 14,
                                     ),
@@ -2813,7 +3515,10 @@ class _ReceiptAnalysisOverlayState extends State<_ReceiptAnalysisOverlay>
                                     size: orbSize * 0.44,
                                     color: Colors.white,
                                     shadows: const [
-                                      Shadow(color: Color(0xCC10B981), blurRadius: 24),
+                                      Shadow(
+                                        color: Color(0xCC10B981),
+                                        blurRadius: 24,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -2925,10 +3630,12 @@ class _WizardFieldLabel extends StatelessWidget {
       padding: const EdgeInsets.only(left: 2, bottom: 8),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: Color(0xFFD6E0ED),
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.84),
         ),
       ),
     );
@@ -2965,7 +3672,9 @@ class _WarrantyDurationPill extends StatelessWidget {
       selected: selected,
       label: '$label Garantie',
       child: Material(
-        color: selected ? GarantieHeldApp.emerald : GarantieHeldApp.surface,
+        color: selected
+            ? GarantieHeldApp.emerald
+            : GarantieHeldApp.surfaceFor(context),
         borderRadius: BorderRadius.circular(24),
         child: InkWell(
           onTap: onTap,
@@ -2975,7 +3684,11 @@ class _WarrantyDurationPill extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFFCBD5E1),
+                color: selected
+                    ? Colors.white
+                    : Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.82),
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
               ),
@@ -3021,7 +3734,8 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       if (!permission.isGranted) {
         if (mounted) {
           setState(() {
-            _canOpenSettings = permission.isPermanentlyDenied || permission.isRestricted;
+            _canOpenSettings =
+                permission.isPermanentlyDenied || permission.isRestricted;
             _error = _canOpenSettings
                 ? 'Kamerazugriff ist gesperrt. Erlaube ihn in den App-Einstellungen.'
                 : 'Für den Bon-Scan wird Kamerazugriff benötigt.';
@@ -3052,7 +3766,8 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     } on CameraException catch (error) {
       if (mounted) setState(() => _error = error.description ?? error.code);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Die Kamera konnte nicht gestartet werden.');
+      if (mounted)
+        setState(() => _error = 'Die Kamera konnte nicht gestartet werden.');
     }
   }
 
@@ -3083,14 +3798,16 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       if (identical(_controller, controller)) _controller = null;
       await controller.dispose();
       if (mounted) {
-        await _popWithResult(
-          ReceiptOcrParser.parse('', imagePath: imagePath),
-        );
+        await _popWithResult(ReceiptOcrParser.parse('', imagePath: imagePath));
       }
     } on CameraException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.description ?? 'Foto konnte nicht aufgenommen werden.')),
+          SnackBar(
+            content: Text(
+              error.description ?? 'Foto konnte nicht aufgenommen werden.',
+            ),
+          ),
         );
       }
     } catch (_) {
@@ -3109,12 +3826,18 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     if (controller == null || !controller.value.isInitialized || _busy) return;
     final enableFlash = !_flashEnabled;
     try {
-      await controller.setFlashMode(enableFlash ? FlashMode.always : FlashMode.off);
+      await controller.setFlashMode(
+        enableFlash ? FlashMode.always : FlashMode.off,
+      );
       if (mounted) setState(() => _flashEnabled = enableFlash);
     } on CameraException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.description ?? 'Blitz konnte nicht geändert werden.')),
+          SnackBar(
+            content: Text(
+              error.description ?? 'Blitz konnte nicht geändert werden.',
+            ),
+          ),
         );
       }
     }
@@ -3133,7 +3856,9 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Das Bild bleibt vorerst nur temporär verfügbar.')),
+            const SnackBar(
+              content: Text('Das Bild bleibt vorerst nur temporär verfügbar.'),
+            ),
           );
         }
       }
@@ -3147,7 +3872,11 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Das Foto konnte nicht aus der Galerie geladen werden.')),
+          const SnackBar(
+            content: Text(
+              'Das Foto konnte nicht aus der Galerie geladen werden.',
+            ),
+          ),
         );
       }
     } finally {
@@ -3211,78 +3940,85 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
         if (!didPop && !_allowPop) unawaited(_leaveToHome());
       },
       child: Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: const Text('Bon scannen'),
         backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        leading: IconButton(
-          tooltip: 'Zur Startseite',
-          onPressed: _busy ? null : _leaveToHome,
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        actions: [
-          IconButton(
-            tooltip: _flashEnabled ? 'Blitz ausschalten' : 'Blitz einschalten',
-            onPressed: controller == null || !controller.value.isInitialized || _busy
-                ? null
-                : _toggleFlash,
-            icon: Icon(_flashEnabled ? Icons.flash_on : Icons.flash_off),
+        appBar: AppBar(
+          titleSpacing: 0,
+          title: const Text('Bon scannen'),
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          leading: IconButton(
+            tooltip: 'Zur Startseite',
+            onPressed: _busy ? null : _leaveToHome,
+            icon: const Icon(Icons.arrow_back_rounded),
           ),
-          IconButton(
-            tooltip: 'Foto aus Galerie laden',
-            onPressed: _busy ? null : _pickFromGallery,
-            icon: const Icon(Icons.photo_library_outlined),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Center(
-              child: Text(
-                'Schritt 1/2',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.56),
-                  fontSize: 12,
+          actions: [
+            IconButton(
+              tooltip: _flashEnabled
+                  ? 'Blitz ausschalten'
+                  : 'Blitz einschalten',
+              onPressed:
+                  controller == null || !controller.value.isInitialized || _busy
+                  ? null
+                  : _toggleFlash,
+              icon: Icon(_flashEnabled ? Icons.flash_on : Icons.flash_off),
+            ),
+            IconButton(
+              tooltip: 'Foto aus Galerie laden',
+              onPressed: _busy ? null : _pickFromGallery,
+              icon: const Icon(Icons.photo_library_outlined),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: Text(
+                  'Schritt 1/2',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.56),
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-      body: _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.no_photography_outlined, size: 48),
-                    const SizedBox(height: 14),
-                    Text(_error!, textAlign: TextAlign.center),
-                    const SizedBox(height: 10),
-                    const Text('Du kannst die Garantie anschließend manuell erfassen.'),
-                    const SizedBox(height: 18),
-                    FilledButton(
-                      onPressed: () => _continueManually(),
-                      child: const Text('Manuell eingeben'),
-                    ),
-                    if (_canOpenSettings) ...[
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: openAppSettings,
-                        icon: const Icon(Icons.settings_outlined),
-                        label: const Text('Einstellungen öffnen'),
+          ],
+        ),
+        body: _error != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.no_photography_outlined, size: 48),
+                      const SizedBox(height: 14),
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Du kannst die Garantie anschließend manuell erfassen.',
                       ),
+                      const SizedBox(height: 18),
+                      FilledButton(
+                        onPressed: () => _continueManually(),
+                        child: const Text('Manuell eingeben'),
+                      ),
+                      if (_canOpenSettings) ...[
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: openAppSettings,
+                          icon: const Icon(Icons.settings_outlined),
+                          label: const Text('Einstellungen öffnen'),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            )
-          : controller == null || !controller.value.isInitialized
-              ? const Center(
-                  child: CircularProgressIndicator(color: GarantieHeldApp.emerald),
-                )
-              : _buildCameraScanner(controller),
+              )
+            : controller == null || !controller.value.isInitialized
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: GarantieHeldApp.emerald,
+                ),
+              )
+            : _buildCameraScanner(controller),
       ),
     );
   }
@@ -3293,7 +4029,10 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
         final guideWidth = constraints.maxWidth * 0.86;
         final guideHeight = constraints.maxHeight * 0.60;
         final guideRect = Rect.fromCenter(
-          center: Offset(constraints.maxWidth / 2, constraints.maxHeight * 0.32),
+          center: Offset(
+            constraints.maxWidth / 2,
+            constraints.maxHeight * 0.32,
+          ),
           width: guideWidth,
           height: guideHeight,
         );
@@ -3307,10 +4046,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                 painter: _ScannerShadePainter(guideRect: guideRect),
               ),
             ),
-            Positioned.fromRect(
-              rect: guideRect,
-              child: const _ScannerGuide(),
-            ),
+            Positioned.fromRect(rect: guideRect, child: const _ScannerGuide()),
             Positioned(
               left: 24,
               right: 24,
@@ -3349,7 +4085,10 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                         foregroundColor: const Color(0xFF052E23),
                         child: _busy
                             ? const CircularProgressIndicator()
-                            : const Icon(Icons.document_scanner_rounded, size: 32),
+                            : const Icon(
+                                Icons.document_scanner_rounded,
+                                size: 32,
+                              ),
                       ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
@@ -3359,7 +4098,9 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           backgroundColor: const Color(0x991E293B),
-                          side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.5),
+                          ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 18,
                             vertical: 12,
@@ -3378,7 +4119,10 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                   child: Center(
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 28),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 22,
+                      ),
                       decoration: BoxDecoration(
                         color: GarantieHeldApp.surface,
                         borderRadius: BorderRadius.circular(22),
@@ -3453,9 +4197,7 @@ class _ScannerGuide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: CustomPaint(painter: _ScannerCornersPainter()),
-    );
+    return IgnorePointer(child: CustomPaint(painter: _ScannerCornersPainter()));
   }
 }
 
@@ -3481,7 +4223,8 @@ class _DashedReceiptBorderPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _DashedReceiptBorderPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _DashedReceiptBorderPainter oldDelegate) =>
+      false;
 }
 
 class _ScannerShadePainter extends CustomPainter {
@@ -3525,7 +4268,12 @@ class _ScannerCornersPainter extends CustomPainter {
       ..lineTo(cornerLength, inset)
       ..moveTo(size.width - cornerLength, inset)
       ..lineTo(size.width - inset - 20, inset)
-      ..quadraticBezierTo(size.width - inset, inset, size.width - inset, inset + 20)
+      ..quadraticBezierTo(
+        size.width - inset,
+        inset,
+        size.width - inset,
+        inset + 20,
+      )
       ..lineTo(size.width - inset, cornerLength)
       ..moveTo(size.width - inset, size.height - cornerLength)
       ..lineTo(size.width - inset, size.height - inset - 20)
@@ -3538,7 +4286,12 @@ class _ScannerCornersPainter extends CustomPainter {
       ..lineTo(size.width - cornerLength, size.height - inset)
       ..moveTo(cornerLength, size.height - inset)
       ..lineTo(inset + 20, size.height - inset)
-      ..quadraticBezierTo(inset, size.height - inset, inset, size.height - inset - 20)
+      ..quadraticBezierTo(
+        inset,
+        size.height - inset,
+        inset,
+        size.height - inset - 20,
+      )
       ..lineTo(inset, size.height - cornerLength);
     canvas.drawPath(path, paint);
   }
@@ -3546,4 +4299,3 @@ class _ScannerCornersPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScannerCornersPainter oldDelegate) => false;
 }
-

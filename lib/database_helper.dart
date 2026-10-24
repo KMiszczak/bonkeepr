@@ -1,4 +1,4 @@
-﻿import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
 import 'warranty_model.dart';
@@ -18,7 +18,7 @@ class DatabaseHelper {
     final databasesPath = await getDatabasesPath();
     final database = await openDatabase(
       path.join(databasesPath, _databaseName),
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
@@ -30,6 +30,7 @@ class DatabaseHelper {
             warrantyMonths INTEGER NOT NULL,
             category TEXT NOT NULL,
             imagePath TEXT NOT NULL,
+            receiptPaths TEXT,
             warrantyDays INTEGER,
             serialNumber TEXT,
             notes TEXT,
@@ -41,6 +42,11 @@ class DatabaseHelper {
         if (oldVersion < 2) {
           await db.execute(
             'ALTER TABLE $_tableName ADD COLUMN warrantyDays INTEGER',
+          );
+        }
+        if (oldVersion < 3) {
+          await db.execute(
+            'ALTER TABLE $_tableName ADD COLUMN receiptPaths TEXT',
           );
         }
       },

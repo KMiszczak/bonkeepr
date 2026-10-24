@@ -1,11 +1,4 @@
-﻿enum Category {
-  elektronik,
-  haushalt,
-  moebel,
-  werkzeug,
-  kleidung,
-  sonstiges,
-}
+enum Category { elektronik, haushalt, moebel, werkzeug, kleidung, sonstiges }
 
 class Warranty {
   const Warranty({
@@ -17,6 +10,7 @@ class Warranty {
     required this.warrantyMonths,
     required this.category,
     required this.imagePath,
+    this.receiptPaths = const [],
     this.warrantyDays,
     this.serialNumber,
     this.notes,
@@ -31,6 +25,13 @@ class Warranty {
   final int warrantyMonths;
   final Category category;
   final String imagePath;
+  final List<String> receiptPaths;
+
+  List<String> get allReceiptPaths => receiptPaths.isNotEmpty
+      ? receiptPaths
+      : imagePath.isEmpty
+      ? const []
+      : [imagePath];
   final int? warrantyDays;
   final String? serialNumber;
   final String? notes;
@@ -41,7 +42,8 @@ class Warranty {
     if (warrantyDays != null) {
       return purchaseDate.add(Duration(days: warrantyDays!));
     }
-    final monthIndex = purchaseDate.year * 12 + purchaseDate.month - 1 + warrantyMonths;
+    final monthIndex =
+        purchaseDate.year * 12 + purchaseDate.month - 1 + warrantyMonths;
     final year = monthIndex ~/ 12;
     final month = monthIndex % 12 + 1;
     final lastDay = DateTime(year, month + 1, 0).day;
@@ -72,22 +74,24 @@ class Warranty {
   bool get isExpiringSoon => remainingDays >= 0 && remainingDays < 30;
 
   Map<String, Object?> toMap() => {
-        'id': id,
-        'title': title,
-        'storeName': storeName,
-        'price': price,
-        'purchaseDate': purchaseDate.toIso8601String(),
-        'warrantyMonths': warrantyMonths,
-        'category': category.name,
-        'imagePath': imagePath,
-        'warrantyDays': warrantyDays,
-        'serialNumber': serialNumber,
-        'notes': notes,
-        'reminderDaysBefore': reminderDaysBefore,
-      };
+    'id': id,
+    'title': title,
+    'storeName': storeName,
+    'price': price,
+    'purchaseDate': purchaseDate.toIso8601String(),
+    'warrantyMonths': warrantyMonths,
+    'category': category.name,
+    'imagePath': imagePath,
+    'receiptPaths': receiptPaths.isEmpty ? null : receiptPaths.join('|'),
+    'warrantyDays': warrantyDays,
+    'serialNumber': serialNumber,
+    'notes': notes,
+    'reminderDaysBefore': reminderDaysBefore,
+  };
 
   factory Warranty.fromMap(Map<String, Object?> map) {
     final categoryName = map['category'] as String?;
+    final storedPaths = map['receiptPaths'] as String?;
     return Warranty(
       id: map['id'] as String,
       title: map['title'] as String,
@@ -100,6 +104,9 @@ class Warranty {
         orElse: () => Category.sonstiges,
       ),
       imagePath: map['imagePath'] as String? ?? '',
+      receiptPaths: storedPaths == null || storedPaths.isEmpty
+          ? const []
+          : storedPaths.split('|'),
       warrantyDays: map['warrantyDays'] as int?,
       serialNumber: map['serialNumber'] as String?,
       notes: map['notes'] as String?,
