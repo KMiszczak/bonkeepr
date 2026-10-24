@@ -4,12 +4,14 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:camera/camera.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -17,6 +19,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'database_helper.dart';
 import 'gemini_receipt_analyzer.dart';
+import 'notification_service.dart';
 import 'receipt_ocr_parser.dart';
 import 'settings_screen.dart';
 import 'warranty_model.dart';
@@ -92,6 +95,34 @@ class GarantieHeldApp extends StatelessWidget {
   }
 }
 
+Future<void> _shareWarrantyData(BuildContext context, Warranty warranty) async {
+  final purchaseDate = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.purchaseDate);
+  final expirationDate = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.expirationDate);
+  final price = '${NumberFormat('#,##0.00', 'de_DE').format(warranty.price)} €';
+  final text = '''📄 BonKeepr Beleg-Export
+
+Produkt: ${warranty.title}
+Händler: ${warranty.storeName.isEmpty ? '—' : warranty.storeName}
+Kaufpreis: $price
+Kaufdatum: $purchaseDate
+Garantie bis: $expirationDate
+
+Gesichert mit BonKeepr 🛡️''';
+  try {
+    final filePath = warranty.imagePath;
+    final files = filePath.isNotEmpty && await File(filePath).exists()
+        ? [XFile(filePath)]
+        : <XFile>[];
+    await SharePlus.instance.share(ShareParams(text: text, files: files));
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Der Beleg konnte nicht geteilt werden.')),
+      );
+    }
+  }
+}
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -140,9 +171,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
     if (warranty == null || !mounted) return;
     await DatabaseHelper.instance.insertWarranty(warranty);
+    final scheduled = await NotificationService.scheduleWarrantyReminder(warranty);
     if (!mounted) return;
     await _refresh();
     if (!mounted) return;
+    if (!scheduled && warranty.reminderDaysBefore >= 0) {
+      _showNotificationPermissionHint();
+    }
     await _showSuccessOverlay();
   }
 
@@ -154,10 +189,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
     if (!mounted || result == null) return;
     if (result.updatedWarranty != null) {
+      await NotificationService.scheduleWarrantyReminder(result.updatedWarranty!);
       await _refresh();
     } else if (result.deletedWarrantyId != null) {
+      await NotificationService.cancelWarrantyReminder(result.deletedWarrantyId!);
       await _animateDeletedWarranty(result.deletedWarrantyId!);
     }
+  }
+
+  Future<void> _editWarrantyFromCard(Warranty warranty) async {
+    final result = await Navigator.of(context).push<Warranty>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => WarrantyFormPage(
+          warranty: warranty,
+          scanResult: ReceiptOcrResult(
+            fullText: '',
+            productTitle: warranty.title,
+            storeName: warranty.storeName,
+            productPrice: warranty.price,
+            purchaseDate: warranty.purchaseDate,
+            category: warranty.category.name,
+            imagePath: warranty.imagePath,
+          ),
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    await DatabaseHelper.instance.updateWarranty(result);
+    final scheduled = await NotificationService.scheduleWarrantyReminder(result);
+    if (!mounted) return;
+    await _refresh();
+    if (!scheduled && result.reminderDaysBefore >= 0) {
+      _showNotificationPermissionHint();
+    }
+  }
+
+  void _showNotificationPermissionHint() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Erinnerung konnte nicht geplant werden. Bitte Benachrichtigungen erlauben.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteWarrantyFromCard(Warranty warranty) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: GarantieHeldApp.surface,
+        title: const Text('Garantie wirklich löschen?'),
+        content: const Text('Diese Aktion kann nicht rückgängig gemacht werden.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFF87171)),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await DatabaseHelper.instance.deleteWarranty(warranty.id);
+    await NotificationService.cancelWarrantyReminder(warranty.id);
+    if (mounted) await _animateDeletedWarranty(warranty.id);
   }
 
   Future<void> _animateDeletedWarranty(String id) async {
@@ -434,6 +535,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   warranty: item,
                                   price: _currency.format(item.price),
                                   purchaseDate: _date.format(item.purchaseDate),
+                                  onShare: () => _shareWarrantyData(context, item),
+                                  onDetails: () => _openWarrantyDetails(item),
+                                  onEdit: () => _editWarrantyFromCard(item),
+                                  onDelete: () => _deleteWarrantyFromCard(item),
                                 ),
                               ),
                             ),
@@ -557,6 +662,10 @@ class _BonKeeprInfoSheet extends StatelessWidget {
                       _InfoFeature(
                         icon: Icons.auto_awesome_rounded,
                         text: 'KI-Erkennung: Fotografiere deinen Beleg – Händler, Preis & Datum werden automatisch erfasst.',
+                      ),
+                      _InfoFeature(
+                        icon: Icons.edit_note_rounded,
+                        text: 'Manuelle Eingabe & Datenschutz: Kein KI-Fan? Du kannst alle Belege und Garantien auch vollständig manuell erfassen. Es werden dann keinerlei Daten an eine KI gesendet.',
                       ),
                       _InfoFeature(
                         icon: Icons.schedule_rounded,
@@ -734,29 +843,7 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
   }
 
   Future<void> _shareWarranty() async {
-    final warranty = widget.warranty;
-    final purchaseDate = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.purchaseDate);
-    final expirationDate = DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.expirationDate);
-    final price = '${NumberFormat('#,##0.00', 'de_DE').format(warranty.price)} €';
-    final text = '''📄 BonKeepr Beleg-Export
-
-Produkt: ${warranty.title}
-Händler: ${warranty.storeName.isEmpty ? '—' : warranty.storeName}
-Kaufpreis: $price
-Kaufdatum: $purchaseDate
-Garantie bis: $expirationDate
-
-Gesichert mit BonKeepr 🛡️''';
-
-    try {
-      final imagePath = warranty.imagePath;
-      final files = imagePath.isNotEmpty && await File(imagePath).exists()
-          ? [XFile(imagePath)]
-          : <XFile>[];
-      await SharePlus.instance.share(ShareParams(text: text, files: files));
-    } catch (_) {
-      _showMessage('Der Beleg konnte nicht geteilt werden.');
-    }
+    await _shareWarrantyData(context, widget.warranty);
   }
 
   Future<void> _exportReceipt() async {
@@ -883,6 +970,10 @@ Gesichert mit BonKeepr 🛡️''';
   Future<void> _showReceiptFullscreen() async {
     final imagePath = widget.warranty.imagePath;
     if (imagePath.isEmpty) return;
+    if (_isPdfPath(imagePath)) {
+      await OpenFilex.open(imagePath);
+      return;
+    }
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black,
@@ -952,37 +1043,59 @@ Gesichert mit BonKeepr 🛡️''';
                   onTap: _showReceiptFullscreen,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
-                    child: Image.file(
-                      File(warranty.imagePath),
-                      height: 240,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(
-                        height: 120,
-                        child: Center(child: Text('Belegfoto nicht verfügbar')),
+                    child: _isPdfPath(warranty.imagePath)
+                        ? Container(
+                            height: 180,
+                            width: double.infinity,
+                            color: GarantieHeldApp.surface,
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.picture_as_pdf_rounded,
+                                  color: Color(0xFFF87171),
+                                  size: 54,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'PDF-Beleg öffnen',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Image.file(
+                            File(warranty.imagePath),
+                            height: 240,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox(
+                              height: 120,
+                              child: Center(child: Text('Belegfoto nicht verfügbar')),
+                            ),
+                          ),
+                  ),
+                ),
+                if (!_isPdfPath(warranty.imagePath))
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: Material(
+                      color: const Color.fromRGBO(0, 0, 0, 0.5),
+                      shape: const CircleBorder(),
+                      child: IconButton(
+                        tooltip: 'Kassenbon auf Gerät speichern',
+                        onPressed: _busy ? null : _exportReceipt,
+                        icon: const Icon(Icons.download_rounded),
+                        color: Colors.white,
+                        iconSize: 24,
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color.fromRGBO(0, 0, 0, 0.5),
+                          fixedSize: const Size(48, 48),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: Material(
-                    color: const Color.fromRGBO(0, 0, 0, 0.5),
-                    shape: const CircleBorder(),
-                    child: IconButton(
-                      tooltip: 'Kassenbon auf Gerät speichern',
-                      onPressed: _busy ? null : _exportReceipt,
-                      icon: const Icon(Icons.download_rounded),
-                      color: Colors.white,
-                      iconSize: 24,
-                      style: IconButton.styleFrom(
-                        backgroundColor: const Color.fromRGBO(0, 0, 0, 0.5),
-                        fixedSize: const Size(48, 48),
-                      ),
-                    ),
-                  ),
-                ),
                 Positioned(
                   left: 12,
                   bottom: 16,
@@ -992,11 +1105,13 @@ Gesichert mit BonKeepr 🛡️''';
                         color: const Color.fromRGBO(0, 0, 0, 0.5),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Padding(
+                      child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         child: Text(
-                          'Tippen zum Vergrößern',
-                          style: TextStyle(color: Colors.white, fontSize: 11),
+                          _isPdfPath(warranty.imagePath)
+                              ? 'Tippen zum Öffnen'
+                              : 'Tippen zum Vergrößern',
+                          style: const TextStyle(color: Colors.white, fontSize: 11),
                         ),
                       ),
                     ),
@@ -1024,7 +1139,7 @@ Gesichert mit BonKeepr 🛡️''';
           _WarrantyDetailTile(label: 'Kaufpreis', value: price),
           _WarrantyDetailTile(label: 'Kaufdatum', value: date),
           _WarrantyDetailTile(label: 'Kategorie', value: _categoryLabel(warranty.category)),
-          _WarrantyDetailTile(label: 'Garantielaufzeit', value: '${warranty.warrantyMonths} Monate'),
+          _WarrantyDetailTile(label: 'Garantielaufzeit', value: warranty.durationLabel),
           _WarrantyDetailTile(label: 'Garantieende', value: DateFormat('dd.MM.yyyy', 'de_DE').format(warranty.expirationDate)),
         ],
       ),
@@ -1157,6 +1272,8 @@ class _WarrantyStatusBadgeState extends State<_WarrantyStatusBadge>
   }
 }
 
+bool _isPdfPath(String filePath) => path.extension(filePath).toLowerCase() == '.pdf';
+
 String _categoryLabel(Category category) => switch (category) {
       Category.elektronik => 'Elektronik',
       Category.haushalt => 'Haushalt',
@@ -1273,11 +1390,19 @@ class _WarrantyCard extends StatelessWidget {
     required this.warranty,
     required this.price,
     required this.purchaseDate,
+    required this.onShare,
+    required this.onDetails,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   final Warranty warranty;
   final String price;
   final String purchaseDate;
+  final VoidCallback onShare;
+  final VoidCallback onDetails;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   static const _icons = <Category, IconData>{
     Category.elektronik: Icons.devices,
@@ -1293,8 +1418,9 @@ class _WarrantyCard extends StatelessWidget {
     final expired = warranty.isExpired;
     final remainingDays = warranty.remainingDays;
     final nearingExpiry = !expired && remainingDays < 30;
-    final statusColor = expired
-        ? const Color(0xFFF87171)
+    final criticalExpiry = remainingDays < 7;
+    final statusColor = criticalExpiry
+        ? Colors.redAccent
         : nearingExpiry
             ? const Color(0xFFF97316)
             : GarantieHeldApp.emerald;
@@ -1306,7 +1432,7 @@ class _WarrantyCard extends StatelessWidget {
                 ? 'Achtung: Noch $remainingDays Tage'
                 : 'Noch $remainingDays Tage';
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
         color: GarantieHeldApp.surface,
         borderRadius: BorderRadius.circular(20),
@@ -1315,8 +1441,8 @@ class _WarrantyCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
               color: GarantieHeldApp.surface,
               borderRadius: BorderRadius.circular(15),
@@ -1333,7 +1459,7 @@ class _WarrantyCard extends StatelessWidget {
               color: GarantieHeldApp.emerald,
             ),
           ),
-          const SizedBox(width: 13),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1363,7 +1489,9 @@ class _WarrantyCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.12),
+                          color: criticalExpiry
+                              ? Colors.red.withValues(alpha: 0.2)
+                              : statusColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -1383,7 +1511,127 @@ class _WarrantyCard extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: 7),
+          InkWell(
+            onTap: onDetails,
+            borderRadius: BorderRadius.circular(10),
+            child: _receiptThumbnail(),
+          ),
+          const SizedBox(width: 6),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: SizedBox(
+              width: 60,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _CardQuickAction(
+                      tooltip: 'Teilen',
+                      icon: Icons.share_outlined,
+                      onTap: onShare,
+                    ),
+                    _CardQuickAction(
+                      tooltip: 'Details',
+                      icon: Icons.visibility_outlined,
+                      onTap: onDetails,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _CardQuickAction(
+                      tooltip: 'Bearbeiten',
+                      icon: Icons.edit_outlined,
+                      onTap: onEdit,
+                    ),
+                    _CardQuickAction(
+                      tooltip: 'Löschen',
+                      icon: Icons.delete_outline_rounded,
+                      color: const Color(0xFFF87171),
+                      onTap: onDelete,
+                    ),
+                  ],
+                ),
+                ],
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _receiptThumbnail() {
+    final filePath = warranty.imagePath;
+    final isPdf = filePath.toLowerCase().endsWith('.pdf');
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: 56,
+        height: 56,
+        child: filePath.isEmpty
+            ? const ColoredBox(
+                color: Color(0xFF0F172A),
+                child: Icon(Icons.receipt_long_outlined, color: Colors.white54, size: 24),
+              )
+            : isPdf
+                ? const ColoredBox(
+                    color: Color(0xFF0F172A),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFF87171), size: 25),
+                        Text('PDF', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                  )
+                : Image.file(
+                    File(filePath),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const ColoredBox(
+                      color: Color(0xFF0F172A),
+                      child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 22),
+                    ),
+                  ),
+      ),
+    );
+  }
+}
+
+class _CardQuickAction extends StatelessWidget {
+  const _CardQuickAction({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+    this.color = GarantieHeldApp.emerald,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: Icon(icon, color: color, size: 17),
+          ),
+        ),
       ),
     );
   }
@@ -1486,6 +1734,8 @@ class WarrantyFormPage extends StatefulWidget {
   State<WarrantyFormPage> createState() => _WarrantyFormPageState();
 }
 
+enum _ReceiptUploadSource { camera, gallery, pdf }
+
 class _WarrantyFormPageState extends State<WarrantyFormPage> {
   final _formKey = GlobalKey<FormState>();
   final _imagePicker = ImagePicker();
@@ -1495,6 +1745,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   final _purchaseDateController = TextEditingController();
   late ReceiptOcrResult _scanResult;
   int _warrantyMonths = 24;
+  int? _warrantyDays;
+  int _reminderDaysBefore = 30;
   Category _category = Category.elektronik;
   DateTime? _purchaseDate;
   bool _dateError = false;
@@ -1521,6 +1773,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     _purchaseDate = existing?.purchaseDate ?? result.purchaseDate ?? DateTime.now();
     _category = existing?.category ?? _categoryFromGemini(result.category);
     _warrantyMonths = existing?.warrantyMonths ?? 24;
+    _warrantyDays = existing?.warrantyDays;
+    _reminderDaysBefore = existing?.reminderDaysBefore ?? 30;
     _purchaseDateController.text = DateFormat('dd.MM.yyyy').format(_purchaseDate!);
     _isAnalyzing = existing == null && result.imagePath.isNotEmpty;
     if (_isAnalyzing) unawaited(_analyzeReceipt());
@@ -1629,6 +1883,14 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         _ => Category.sonstiges,
       };
 
+  bool _durationMatches(_WarrantyDurationChoice choice) =>
+      _warrantyMonths == choice.months && _warrantyDays == choice.days;
+
+  void _selectDuration(_WarrantyDurationChoice choice) {
+    _warrantyMonths = choice.months;
+    _warrantyDays = choice.days;
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -1651,11 +1913,12 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       price: double.parse(_priceController.text.trim().replaceAll(',', '.')),
       purchaseDate: _purchaseDate!,
       warrantyMonths: _warrantyMonths,
+      warrantyDays: _warrantyDays,
       category: _category,
       imagePath: _scanResult.imagePath,
       serialNumber: widget.warranty?.serialNumber,
       notes: widget.warranty?.notes,
-      reminderDaysBefore: widget.warranty?.reminderDaysBefore ?? 30,
+      reminderDaysBefore: _reminderDaysBefore,
     );
     if (widget.warranty == null) {
       setState(() => _allowPop = true);
@@ -1708,6 +1971,10 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   Future<void> _showReceiptPreview() async {
     final imagePath = _scanResult.imagePath;
     if (imagePath.isEmpty) return;
+    if (_isPdfPath(imagePath)) {
+      await OpenFilex.open(imagePath);
+      return;
+    }
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black,
@@ -1744,7 +2011,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   }
 
   Future<void> _chooseReceiptImage() async {
-    final source = await showModalBottomSheet<ImageSource>(
+    final source = await showModalBottomSheet<_ReceiptUploadSource>(
       context: context,
       useSafeArea: true,
       backgroundColor: GarantieHeldApp.surface,
@@ -1780,12 +2047,17 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
               ListTile(
                 leading: const Icon(Icons.camera_alt_rounded, color: GarantieHeldApp.emerald),
                 title: const Text('Foto jetzt aufnehmen'),
-                onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+                onTap: () => Navigator.of(sheetContext).pop(_ReceiptUploadSource.camera),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_rounded, color: GarantieHeldApp.emerald),
                 title: const Text('Aus Galerie auswählen'),
-                onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+                onTap: () => Navigator.of(sheetContext).pop(_ReceiptUploadSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.picture_as_pdf_rounded, color: GarantieHeldApp.emerald),
+                title: const Text('PDF auswählen'),
+                onTap: () => Navigator.of(sheetContext).pop(_ReceiptUploadSource.pdf),
               ),
             ],
           ),
@@ -1795,8 +2067,28 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     if (source == null || !mounted) return;
 
     try {
+      if (source == _ReceiptUploadSource.pdf) {
+        final selection = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: const ['pdf'],
+          withData: true,
+        );
+        if (selection == null || selection.files.isEmpty || !mounted) return;
+        final savedPath = await _persistSelectedReceiptFile(selection.files.single);
+        if (!mounted) return;
+        _analysisGeneration++;
+        _analysisRequestInProgress = false;
+        setState(() {
+          _scanResult = _scanResult.copyWith(imagePath: savedPath);
+          _isAnalyzing = false;
+          _analysisError = null;
+        });
+        return;
+      }
       final image = await _imagePicker.pickImage(
-        source: source,
+        source: source == _ReceiptUploadSource.camera
+            ? ImageSource.camera
+            : ImageSource.gallery,
         imageQuality: 92,
       );
       if (image == null || !mounted) return;
@@ -1827,6 +2119,23 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     return (await File(sourcePath).copy(destination)).path;
   }
 
+  Future<String> _persistSelectedReceiptFile(PlatformFile selectedFile) async {
+    final documents = await getApplicationDocumentsDirectory();
+    final receiptsDirectory = Directory(path.join(documents.path, 'receipts'));
+    await receiptsDirectory.create(recursive: true);
+    final destination = path.join(
+      receiptsDirectory.path,
+      'receipt_${DateTime.now().microsecondsSinceEpoch}.pdf',
+    );
+    final sourcePath = selectedFile.path;
+    if (sourcePath != null) {
+      return (await File(sourcePath).copy(destination)).path;
+    }
+    final bytes = selectedFile.bytes;
+    if (bytes == null) throw const FormatException('PDF-Datei ist nicht lesbar.');
+    return (await File(destination).writeAsBytes(bytes, flush: true)).path;
+  }
+
   Widget _clearButton(TextEditingController controller) {
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
@@ -1842,7 +2151,16 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    const availableMonths = [12, 24, 36];
+    const durationChoices = [
+      _WarrantyDurationChoice(label: '2 Wochen', months: 0, days: 14),
+      _WarrantyDurationChoice(label: '1 Monat', months: 1),
+      _WarrantyDurationChoice(label: '2 Monate', months: 2),
+      _WarrantyDurationChoice(label: '12 Monate', months: 12),
+      _WarrantyDurationChoice(label: '24 Monate', months: 24),
+      _WarrantyDurationChoice(label: '36 Monate', months: 36),
+      _WarrantyDurationChoice(label: '48 Monate', months: 48),
+      _WarrantyDurationChoice(label: '60 Monate', months: 60),
+    ];
     final isEditing = widget.warranty != null;
     return Stack(
       fit: StackFit.expand,
@@ -1949,19 +2267,40 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                             onTap: _showReceiptPreview,
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Image.file(
-                                File(_scanResult.imagePath),
-                                height: 180,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  height: 180,
-                                  width: double.infinity,
-                                  alignment: Alignment.center,
-                                  color: GarantieHeldApp.surface,
-                                  child: const Text('Kassenbon-Bild nicht verfügbar'),
-                                ),
-                              ),
+                              child: _isPdfPath(_scanResult.imagePath)
+                                  ? Container(
+                                      height: 180,
+                                      width: double.infinity,
+                                      color: GarantieHeldApp.surface,
+                                      child: const Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.picture_as_pdf_rounded,
+                                            color: Color(0xFFF87171),
+                                            size: 48,
+                                          ),
+                                          SizedBox(height: 8),
+                                          Text(
+                                            'PDF-Beleg öffnen',
+                                            style: TextStyle(fontWeight: FontWeight.w700),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : Image.file(
+                                      File(_scanResult.imagePath),
+                                      height: 180,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        height: 180,
+                                        width: double.infinity,
+                                        alignment: Alignment.center,
+                                        color: GarantieHeldApp.surface,
+                                        child: const Text('Kassenbon-Bild nicht verfügbar'),
+                                      ),
+                                    ),
                             ),
                           ),
                           Positioned(
@@ -1971,7 +2310,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                               color: const Color(0xB31E293B),
                               shape: const CircleBorder(),
                               child: IconButton(
-                                tooltip: 'Belegfoto ändern',
+                                tooltip: 'Belegdatei ändern',
                                 onPressed: _chooseReceiptImage,
                                 icon: const Icon(Icons.cameraswitch_rounded),
                                 color: Colors.white,
@@ -2017,7 +2356,9 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                       const SizedBox(height: 8),
                       Center(
                         child: Text(
-                          'Tippen zum Vergrößern',
+                          _isPdfPath(_scanResult.imagePath)
+                              ? 'Tippen zum Öffnen'
+                              : 'Tippen zum Vergrößern',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.52),
                             fontSize: 12,
@@ -2125,13 +2466,13 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          for (final months in availableMonths) ...[
+                          for (final choice in durationChoices.take(6)) ...[
                             _WarrantyDurationPill(
-                              months: months,
-                              selected: _warrantyMonths == months,
-                              onTap: () => setState(() => _warrantyMonths = months),
+                              label: choice.label,
+                              selected: _durationMatches(choice),
+                              onTap: () => setState(() => _selectDuration(choice)),
                             ),
-                            if (months != availableMonths.last)
+                            if (choice != durationChoices.take(6).last)
                               const SizedBox(width: 10),
                           ],
                         ],
@@ -2155,19 +2496,37 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                     ),
                     const SizedBox(height: 16),
                     const _WizardFieldLabel('Weitere Laufzeit'),
-                    DropdownButtonFormField<int>(
-                      value: _warrantyMonths,
+                    DropdownButtonFormField<_WarrantyDurationChoice>(
+                      value: durationChoices.firstWhere(_durationMatches),
                       decoration: _wizardInputDecoration(
-                        hintText: 'Monate auswählen',
+                        hintText: 'Laufzeit auswählen',
                       ),
-                      items: const [12, 24, 36, 48, 60]
-                          .map((months) => DropdownMenuItem(
-                                value: months,
-                                child: Text('$months Monate'),
+                      items: durationChoices
+                          .map((choice) => DropdownMenuItem(
+                                value: choice,
+                                child: Text(choice.label),
                               ))
                           .toList(),
+                      onChanged: (value) {
+                        if (value != null) setState(() => _selectDuration(value));
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const _WizardFieldLabel('Erinnerung planen'),
+                    DropdownButtonFormField<int>(
+                      value: _reminderDaysBefore,
+                      decoration: _wizardInputDecoration(
+                        hintText: 'Erinnerung auswählen',
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 0, child: Text('Am Tag des Ablaufs')),
+                        DropdownMenuItem(value: 7, child: Text('1 Woche vorher')),
+                        DropdownMenuItem(value: 14, child: Text('2 Wochen vorher')),
+                        DropdownMenuItem(value: 30, child: Text('1 Monat vorher')),
+                        DropdownMenuItem(value: -1, child: Text('Keine Erinnerung')),
+                      ],
                       onChanged: (value) => setState(
-                        () => _warrantyMonths = value ?? _warrantyMonths,
+                        () => _reminderDaysBefore = value ?? _reminderDaysBefore,
                       ),
                     ),
                   ],
@@ -2576,14 +2935,26 @@ class _WizardFieldLabel extends StatelessWidget {
   }
 }
 
+class _WarrantyDurationChoice {
+  const _WarrantyDurationChoice({
+    required this.label,
+    required this.months,
+    this.days,
+  });
+
+  final String label;
+  final int months;
+  final int? days;
+}
+
 class _WarrantyDurationPill extends StatelessWidget {
   const _WarrantyDurationPill({
-    required this.months,
+    required this.label,
     required this.selected,
     required this.onTap,
   });
 
-  final int months;
+  final String label;
   final bool selected;
   final VoidCallback onTap;
 
@@ -2592,7 +2963,7 @@ class _WarrantyDurationPill extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: '$months Monate Garantie',
+      label: '$label Garantie',
       child: Material(
         color: selected ? GarantieHeldApp.emerald : GarantieHeldApp.surface,
         borderRadius: BorderRadius.circular(24),
@@ -2602,7 +2973,7 @@ class _WarrantyDurationPill extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             child: Text(
-              '$months Monate',
+              label,
               style: TextStyle(
                 color: selected ? Colors.white : const Color(0xFFCBD5E1),
                 fontWeight: FontWeight.w700,

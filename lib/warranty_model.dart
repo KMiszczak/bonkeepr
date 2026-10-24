@@ -17,6 +17,7 @@ class Warranty {
     required this.warrantyMonths,
     required this.category,
     required this.imagePath,
+    this.warrantyDays,
     this.serialNumber,
     this.notes,
     this.reminderDaysBefore = 30,
@@ -30,12 +31,16 @@ class Warranty {
   final int warrantyMonths;
   final Category category;
   final String imagePath;
+  final int? warrantyDays;
   final String? serialNumber;
   final String? notes;
   final int reminderDaysBefore;
 
   /// Adds calendar months and clamps to the last valid day of the target month.
   DateTime get expirationDate {
+    if (warrantyDays != null) {
+      return purchaseDate.add(Duration(days: warrantyDays!));
+    }
     final monthIndex = purchaseDate.year * 12 + purchaseDate.month - 1 + warrantyMonths;
     final year = monthIndex ~/ 12;
     final month = monthIndex % 12 + 1;
@@ -56,6 +61,13 @@ class Warranty {
 
   bool get isExpired => remainingDays < 0;
 
+  String get durationLabel {
+    if (warrantyDays != null) {
+      return warrantyDays == 14 ? '2 Wochen' : '$warrantyDays Tage';
+    }
+    return warrantyMonths == 1 ? '1 Monat' : '$warrantyMonths Monate';
+  }
+
   /// A warranty is expiring soon if it expires today or within the next 29 days.
   bool get isExpiringSoon => remainingDays >= 0 && remainingDays < 30;
 
@@ -68,6 +80,7 @@ class Warranty {
         'warrantyMonths': warrantyMonths,
         'category': category.name,
         'imagePath': imagePath,
+        'warrantyDays': warrantyDays,
         'serialNumber': serialNumber,
         'notes': notes,
         'reminderDaysBefore': reminderDaysBefore,
@@ -87,6 +100,7 @@ class Warranty {
         orElse: () => Category.sonstiges,
       ),
       imagePath: map['imagePath'] as String? ?? '',
+      warrantyDays: map['warrantyDays'] as int?,
       serialNumber: map['serialNumber'] as String?,
       notes: map['notes'] as String?,
       reminderDaysBefore: map['reminderDaysBefore'] as int? ?? 30,

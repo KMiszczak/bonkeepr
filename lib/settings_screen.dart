@@ -34,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'warrantyMonths',
         'category',
         'imagePath',
+        'warrantyDays',
         'serialNumber',
         'notes',
         'reminderDaysBefore',
@@ -50,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             warranty.warrantyMonths.toString(),
             warranty.category.name,
             warranty.imagePath,
+            warranty.warrantyDays?.toString() ?? '',
             warranty.serialNumber ?? '',
             warranty.notes ?? '',
             warranty.reminderDaysBefore.toString(),
@@ -149,6 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               orElse: () => Category.sonstiges,
             ),
             imagePath: valueAt(row, 'imagePath'),
+            warrantyDays: int.tryParse(valueAt(row, 'warrantyDays')),
             serialNumber: valueAt(row, 'serialNumber').isEmpty
                 ? null
                 : valueAt(row, 'serialNumber'),
