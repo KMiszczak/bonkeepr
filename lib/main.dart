@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -29,6 +30,7 @@ import 'settings_screen.dart';
 import 'theme_controller.dart';
 import 'warranty_model.dart';
 import 'widgets/primary_button.dart';
+import 'widgets/retro_icon.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +52,13 @@ class GarantieHeldApp extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: ThemeController.instance,
     builder: (context, _) {
+      const arcadeBlack = Color(0xFF121212);
+      const arcadeSurface = Color(0xFF1A0933);
+      const arcadeGreen = Color(0xFF00FF66);
+      const arcadePink = Color(0xFFFF007F);
+      const arcadeYellow = Color(0xFFFFD700);
+      const arcadeCyan = Color(0xFF00E5FF);
+
       ThemeData buildTheme(bool dark) => ThemeData(
         useMaterial3: true,
         brightness: dark ? Brightness.dark : Brightness.light,
@@ -71,25 +80,166 @@ class GarantieHeldApp extends StatelessWidget {
       );
       final darkTheme = buildTheme(true);
       final lightTheme = buildTheme(false);
+      final retroTextTheme = GoogleFonts.vt323TextTheme(darkTheme.textTheme)
+          .copyWith(
+            headlineLarge: GoogleFonts.pressStart2p(fontSize: 18),
+            headlineMedium: GoogleFonts.pressStart2p(fontSize: 15),
+            titleLarge: GoogleFonts.pressStart2p(fontSize: 12),
+            titleMedium: GoogleFonts.pressStart2p(fontSize: 10),
+          );
+      final retroTheme = darkTheme.copyWith(
+        scaffoldBackgroundColor: arcadeBlack,
+        colorScheme: const ColorScheme.dark(
+          primary: arcadeGreen,
+          onPrimary: Colors.black,
+          secondary: arcadePink,
+          onSecondary: Colors.white,
+          tertiary: arcadeCyan,
+          onTertiary: Colors.black,
+          surface: arcadeSurface,
+          onSurface: Colors.white,
+          error: arcadePink,
+        ),
+        textTheme: retroTextTheme,
+        appBarTheme: AppBarTheme(
+          backgroundColor: arcadeBlack,
+          foregroundColor: arcadeGreen,
+          titleTextStyle: GoogleFonts.pressStart2p(
+            color: arcadeGreen,
+            fontSize: 12,
+          ),
+          elevation: 0,
+          shape: const Border(
+            bottom: BorderSide(color: Colors.black, width: 3),
+          ),
+        ),
+        cardTheme: const CardThemeData(
+          color: arcadeSurface,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: Colors.black, width: 3),
+          ),
+        ),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: arcadeSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: Colors.black, width: 3),
+          ),
+          elevation: 0,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: arcadeSurface,
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: Colors.black, width: 3),
+          ),
+          enabledBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: Colors.black, width: 3),
+          ),
+          focusedBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: arcadeGreen, width: 3),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: arcadeGreen,
+            foregroundColor: Colors.black,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+              side: BorderSide(color: Colors.black, width: 3),
+            ),
+            textStyle: GoogleFonts.pressStart2p(fontSize: 10),
+            elevation: 0,
+          ),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+              side: BorderSide(color: Colors.black, width: 2),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: arcadeGreen,
+            side: const BorderSide(color: Colors.black, width: 3),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+            ),
+            textStyle: GoogleFonts.pressStart2p(fontSize: 9),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: arcadePink,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+            ),
+            textStyle: GoogleFonts.pressStart2p(fontSize: 9),
+          ),
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: arcadeSurface,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: Colors.black, width: 3),
+          ),
+        ),
+        popupMenuTheme: const PopupMenuThemeData(
+          color: arcadeSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: Colors.black, width: 3),
+          ),
+        ),
+        dividerTheme: const DividerThemeData(
+          color: Colors.black,
+          thickness: 3,
+          space: 3,
+        ),
+        snackBarTheme: const SnackBarThemeData(
+          backgroundColor: arcadeSurface,
+          contentTextStyle: TextStyle(color: arcadeYellow),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: Colors.black, width: 3),
+          ),
+        ),
+      );
+      final isRetroMode = ThemeController.instance.isRetroMode;
       return MaterialApp(
         title: 'GarantieHeld',
         debugShowCheckedModeBanner: false,
-        theme: lightTheme.copyWith(
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFFF1F5F9),
-            foregroundColor: Color(0xFF0F172A),
-            elevation: 0,
-          ),
-          inputDecorationTheme: lightTheme.inputDecorationTheme,
-        ),
-        darkTheme: darkTheme.copyWith(
-          appBarTheme: const AppBarTheme(
-            backgroundColor: background,
-            foregroundColor: Colors.white,
-            elevation: 0,
-          ),
-        ),
-        themeMode: ThemeController.instance.themeMode,
+        theme: isRetroMode
+            ? retroTheme
+            : lightTheme.copyWith(
+                appBarTheme: const AppBarTheme(
+                  backgroundColor: Color(0xFFF1F5F9),
+                  foregroundColor: Color(0xFF0F172A),
+                  elevation: 0,
+                ),
+                inputDecorationTheme: lightTheme.inputDecorationTheme,
+              ),
+        darkTheme: isRetroMode
+            ? retroTheme
+            : darkTheme.copyWith(
+                appBarTheme: const AppBarTheme(
+                  backgroundColor: background,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                ),
+              ),
+        themeMode: isRetroMode
+            ? ThemeMode.dark
+            : ThemeController.instance.themeMode,
         home: const DashboardScreen(),
       );
     },
@@ -237,7 +387,7 @@ class _ReceiptCarouselDialogState extends State<_ReceiptCarouselDialog> {
           leading: IconButton(
             tooltip: 'Schließen',
             onPressed: _rotationInProgress ? null : _closeViewer,
-            icon: const Icon(Icons.close),
+            icon: const RetroIcon(Icons.close),
           ),
         ),
         body: SafeArea(
@@ -256,7 +406,7 @@ class _ReceiptCarouselDialogState extends State<_ReceiptCarouselDialog> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
+                            const RetroIcon(
                               Icons.picture_as_pdf_rounded,
                               color: Color(0xFFF87171),
                               size: 72,
@@ -273,7 +423,7 @@ class _ReceiptCarouselDialogState extends State<_ReceiptCarouselDialog> {
                             const SizedBox(height: 12),
                             FilledButton.icon(
                               onPressed: () => OpenFilex.open(mediaPath),
-                              icon: const Icon(Icons.open_in_new_rounded),
+                              icon: const RetroIcon(Icons.open_in_new_rounded),
                               label: const Text('Mit Standard-App öffnen'),
                             ),
                           ],
@@ -331,7 +481,9 @@ class _ReceiptCarouselDialogState extends State<_ReceiptCarouselDialog> {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: ThemeController.instance.isRetroMode
+                            ? BorderRadius.zero
+                            : BorderRadius.circular(18),
                       ),
                       child: Text(
                         '${_currentPage + 1}/${widget.receiptPaths.length}',
@@ -366,15 +518,17 @@ class _ReceiptCarouselDialogState extends State<_ReceiptCarouselDialog> {
     required IconData icon,
     required VoidCallback? onPressed,
   }) => Container(
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       color: Colors.black45,
-      shape: BoxShape.circle,
+      shape: ThemeController.instance.isRetroMode
+          ? BoxShape.rectangle
+          : BoxShape.circle,
     ),
     child: IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
       color: Colors.white,
-      icon: Icon(icon),
+      icon: RetroIcon(icon),
     ),
   );
 }
@@ -395,8 +549,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _searchController = TextEditingController();
   final Set<String> _deletingWarrantyIds = {};
   final Set<String> _hiddenWarrantyIds = {};
+  Timer? _logoTapResetTimer;
+  int _logoTapCount = 0;
   String _searchQuery = '';
   _WarrantySort _sort = _WarrantySort.expiration;
+
+  void _handleLogoTap() {
+    _logoTapCount++;
+    _logoTapResetTimer?.cancel();
+    _logoTapResetTimer = Timer(const Duration(milliseconds: 900), () {
+      _logoTapCount = 0;
+    });
+    if (_logoTapCount < 5) return;
+
+    _logoTapResetTimer?.cancel();
+    _logoTapCount = 0;
+    final enableRetro = !ThemeController.instance.isRetroMode;
+    unawaited(_toggleRetroMode(enableRetro));
+  }
+
+  Future<void> _toggleRetroMode(bool enabled) async {
+    await ThemeController.instance.setRetroMode(enabled);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled ? '8-Bit Modus aktiviert! 🎮' : 'Normaler Modus aktiviert',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
 
   void _sortWarranties(List<Warranty> items) {
     items.sort(
@@ -420,8 +605,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final selected = await showModalBottomSheet<_WarrantySort>(
       context: context,
       backgroundColor: GarantieHeldApp.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: ThemeController.instance.isRetroMode
+            ? BorderRadius.zero
+            : const BorderRadius.vertical(top: Radius.circular(24)),
+        side: ThemeController.instance.isRetroMode
+            ? const BorderSide(color: Colors.black, width: 3)
+            : BorderSide.none,
       ),
       builder: (sheetContext) => SafeArea(
         child: Padding(
@@ -464,7 +654,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ),
                             SizedBox(width: 8),
-                            Icon(
+                            RetroIcon(
                               Icons.check_circle,
                               color: GarantieHeldApp.emerald,
                             ),
@@ -496,6 +686,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    _logoTapResetTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -680,7 +871,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     width: 124,
                     height: 124,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+                      shape: ThemeController.instance.isRetroMode
+                          ? BoxShape.rectangle
+                          : BoxShape.circle,
+                      border: ThemeController.instance.isRetroMode
+                          ? Border.all(color: Colors.black, width: 3)
+                          : null,
                       color: GarantieHeldApp.emerald.withValues(alpha: 0.14),
                       boxShadow: [
                         BoxShadow(
@@ -692,7 +888,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ],
                     ),
-                    child: const Icon(
+                    child: const RetroIcon(
                       Icons.verified_user_rounded,
                       size: 76,
                       color: GarantieHeldApp.emerald,
@@ -749,10 +945,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         appBar: AppBar(
           title: Row(
             children: [
-              Image.asset(
-                'assets/bonkeeprlogotransparent.png',
-                height: 32,
-                fit: BoxFit.contain,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _handleLogoTap,
+                child: Image.asset(
+                  'assets/bonkeeprlogotransparent.png',
+                  height: 32,
+                  fit: BoxFit.contain,
+                ),
               ),
               const SizedBox(width: 10),
               const Text(
@@ -765,7 +965,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             IconButton(
               tooltip: 'Über BonKeepr',
               onPressed: _showInfoSheet,
-              icon: const Icon(Icons.info_outline),
+              icon: const RetroIcon(Icons.info_outline),
               color: GarantieHeldApp.emerald,
             ),
             IconButton(
@@ -778,7 +978,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
-              icon: const Icon(Icons.settings_outlined),
+              icon: const RetroIcon(Icons.settings_outlined),
               color: GarantieHeldApp.emerald,
             ),
           ],
@@ -835,8 +1035,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               setState(() => _searchQuery = value),
                           textInputAction: TextInputAction.search,
                           decoration: InputDecoration(
+                            filled: true,
                             hintText: 'Garantie oder Händler suchen...',
-                            prefixIcon: const Icon(Icons.search_rounded),
+                            hintStyle: ThemeController.instance.isRetroMode
+                                ? const TextStyle(color: Color(0xFF00E5FF))
+                                : null,
+                            prefixIcon: ThemeController.instance.isRetroMode
+                                ? const Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: RetroIcon(
+                                        Icons.search_rounded,
+                                        size: 20,
+                                        color: Color(0xFF00E5FF),
+                                      ),
+                                    ),
+                                  )
+                                : const RetroIcon(Icons.search_rounded),
                             suffixIcon:
                                 ValueListenableBuilder<TextEditingValue>(
                                   valueListenable: _searchController,
@@ -849,28 +1065,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             _searchController.clear();
                                             setState(() => _searchQuery = '');
                                           },
-                                          icon: const Icon(Icons.clear_rounded),
+                                          icon: const RetroIcon(
+                                            Icons.clear_rounded,
+                                          ),
                                         ),
                                 ),
-                            filled: true,
-                            fillColor: GarantieHeldApp.surfaceFor(context),
+                            fillColor: ThemeController.instance.isRetroMode
+                                ? const Color(0xFF121212)
+                                : GarantieHeldApp.surfaceFor(context),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 15,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
+                              borderRadius: ThemeController.instance.isRetroMode
+                                  ? BorderRadius.zero
+                                  : BorderRadius.circular(12),
+                              borderSide: ThemeController.instance.isRetroMode
+                                  ? const BorderSide(
+                                      color: Colors.black,
+                                      width: 3,
+                                    )
+                                  : BorderSide.none,
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
+                              borderRadius: ThemeController.instance.isRetroMode
+                                  ? BorderRadius.zero
+                                  : BorderRadius.circular(12),
+                              borderSide: ThemeController.instance.isRetroMode
+                                  ? const BorderSide(
+                                      color: Colors.black,
+                                      width: 3,
+                                    )
+                                  : BorderSide.none,
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: GarantieHeldApp.emerald,
-                                width: 1.4,
+                              borderRadius: ThemeController.instance.isRetroMode
+                                  ? BorderRadius.zero
+                                  : BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: ThemeController.instance.isRetroMode
+                                    ? const Color(0xFF00E5FF)
+                                    : GarantieHeldApp.emerald,
+                                width: ThemeController.instance.isRetroMode
+                                    ? 3
+                                    : 1.4,
                               ),
                             ),
                           ),
@@ -881,40 +1120,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Expanded(
                               child: Text(
                                 'Deine Garantien (${filteredWarranties.length})',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                                style: ThemeController.instance.isRetroMode
+                                    ? GoogleFonts.pressStart2p(
+                                        fontSize: 9,
+                                        color: const Color(0xFFFFD700),
+                                      )
+                                    : const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                               ),
                             ),
                             InkWell(
                               onTap: _showSortOptions,
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: ThemeController.instance.isRetroMode
+                                  ? BorderRadius.zero
+                                  : BorderRadius.circular(20),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 11,
                                   vertical: 7,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF334155),
-                                  borderRadius: BorderRadius.circular(20),
+                                  color: ThemeController.instance.isRetroMode
+                                      ? const Color(0xFF1A0933)
+                                      : const Color(0xFF334155),
+                                  borderRadius:
+                                      ThemeController.instance.isRetroMode
+                                      ? BorderRadius.zero
+                                      : BorderRadius.circular(20),
+                                  border: ThemeController.instance.isRetroMode
+                                      ? Border.all(
+                                          color: Colors.black,
+                                          width: 3,
+                                        )
+                                      : null,
+                                  boxShadow:
+                                      ThemeController.instance.isRetroMode
+                                      ? const [
+                                          BoxShadow(
+                                            color: Colors.black,
+                                            offset: Offset(4, 4),
+                                            blurRadius: 0,
+                                          ),
+                                        ]
+                                      : null,
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
                                       'Sortieren',
                                       style: TextStyle(
-                                        color: Color(0xFFE2E8F0),
+                                        color:
+                                            ThemeController.instance.isRetroMode
+                                            ? const Color(0xFF00E5FF)
+                                            : const Color(0xFFE2E8F0),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                     SizedBox(width: 4),
-                                    Icon(
+                                    RetroIcon(
                                       Icons.keyboard_arrow_down_rounded,
                                       size: 16,
-                                      color: Color(0xFFE2E8F0),
+                                      color:
+                                          ThemeController.instance.isRetroMode
+                                          ? const Color(0xFF00E5FF)
+                                          : const Color(0xFFE2E8F0),
                                     ),
                                   ],
                                 ),
@@ -953,7 +1226,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               child: Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: InkWell(
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius:
+                                      ThemeController.instance.isRetroMode
+                                      ? BorderRadius.zero
+                                      : BorderRadius.circular(20),
                                   onTap: isDeleting
                                       ? null
                                       : () => _openWarrantyDetails(item),
@@ -1014,8 +1290,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                 child: PrimaryButton(
-                  label: 'Bon scannen',
-                  icon: Icons.document_scanner_outlined,
+                  key: const ValueKey('dashboard-scan-button'),
+                  label: ThemeController.instance.isRetroMode
+                      ? 'PRESS START'
+                      : 'Bon scannen',
+                  icon: ThemeController.instance.isRetroMode
+                      ? Icons.rocket_launch_rounded
+                      : Icons.document_scanner_outlined,
+                  retroLeading: const Icon(
+                    Icons.rocket_launch,
+                    size: 22,
+                    color: Colors.black,
+                  ),
+                  retroFontSize: 9,
                   onPressed: _addWarranty,
                 ),
               ),
@@ -1036,51 +1323,77 @@ class _BonKeeprInfoSheet extends StatelessWidget {
       heightFactor: 0.84,
       child: Material(
         color: GarantieHeldApp.background,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: ThemeController.instance.isRetroMode
+              ? BorderRadius.zero
+              : const BorderRadius.vertical(top: Radius.circular(28)),
+          side: ThemeController.instance.isRetroMode
+              ? const BorderSide(color: Colors.black, width: 3)
+              : BorderSide.none,
+        ),
         clipBehavior: Clip.antiAlias,
         child: SafeArea(
           top: false,
           child: Column(
             children: [
               const SizedBox(height: 12),
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.34),
-                  borderRadius: BorderRadius.circular(4),
+              if (!ThemeController.instance.isRetroMode)
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.34),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
-              ),
               Padding(
                 padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Center(
-                      child: Image.asset(
-                        'assets/bonkeeprlogotransparent.png',
-                        height: 80,
-                        fit: BoxFit.contain,
-                      ),
+                      child: ThemeController.instance.isRetroMode
+                          ? const RetroIcon(
+                              Icons.verified_user_rounded,
+                              size: 72,
+                              color: Color(0xFF00FF66),
+                            )
+                          : Image.asset(
+                              'assets/bonkeeprlogotransparent.png',
+                              height: 80,
+                              fit: BoxFit.contain,
+                            ),
                     ),
                     SizedBox(height: 18),
                     Text(
-                      'Willkommen bei BonKeepr 🛡️',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 23,
-                        height: 1.2,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      'Willkommen bei BonKeepr',
+                      style: ThemeController.instance.isRetroMode
+                          ? GoogleFonts.pressStart2p(
+                              color: Colors.white,
+                              fontSize: 11,
+                              height: 1.6,
+                            )
+                          : const TextStyle(
+                              color: Colors.white,
+                              fontSize: 23,
+                              height: 1.2,
+                              fontWeight: FontWeight.w800,
+                            ),
                     ),
                     SizedBox(height: 8),
                     Text(
                       'Deine digitale Garage für Garantien & Kassenbons.',
-                      style: TextStyle(
-                        color: Color(0xFFCBD5E1),
-                        fontSize: 14,
-                        height: 1.4,
-                      ),
+                      style: ThemeController.instance.isRetroMode
+                          ? GoogleFonts.vt323(
+                              color: const Color(0xFFCBD5E1),
+                              fontSize: 20,
+                              height: 1.1,
+                            )
+                          : const TextStyle(
+                              color: Color(0xFFCBD5E1),
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
                     ),
                   ],
                 ),
@@ -1143,17 +1456,36 @@ class _BonKeeprInfoSheet extends StatelessWidget {
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: FilledButton.styleFrom(
-                      backgroundColor: GarantieHeldApp.emerald,
-                      foregroundColor: Colors.white,
+                      backgroundColor: ThemeController.instance.isRetroMode
+                          ? const Color(0xFF00FF66)
+                          : GarantieHeldApp.emerald,
+                      foregroundColor: ThemeController.instance.isRetroMode
+                          ? Colors.black
+                          : Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: ThemeController.instance.isRetroMode
+                            ? BorderRadius.zero
+                            : BorderRadius.circular(16),
+                        side: ThemeController.instance.isRetroMode
+                            ? const BorderSide(color: Colors.black, width: 3)
+                            : BorderSide.none,
                       ),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      textStyle: ThemeController.instance.isRetroMode
+                          ? GoogleFonts.pressStart2p(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            )
+                          : const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
                     ),
-                    child: const Text('Verstanden'),
+                    child: Text(
+                      'Verstanden',
+                      style: ThemeController.instance.isRetroMode
+                          ? GoogleFonts.pressStart2p(fontSize: 10)
+                          : null,
+                    ),
                   ),
                 ),
               ),
@@ -1181,25 +1513,37 @@ class _InfoFeature extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 1),
-            child: Icon(icon, color: GarantieHeldApp.emerald, size: 21),
+            child: RetroIcon(icon, color: GarantieHeldApp.emerald, size: 21),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: RichText(
               text: TextSpan(
-                style: const TextStyle(
-                  color: Color(0xFFE2E8F0),
-                  fontSize: 13,
-                  height: 1.42,
-                ),
+                style: ThemeController.instance.isRetroMode
+                    ? GoogleFonts.vt323(
+                        color: const Color(0xFFE2E8F0),
+                        fontSize: 19,
+                        height: 1.05,
+                      )
+                    : const TextStyle(
+                        color: Color(0xFFE2E8F0),
+                        fontSize: 13,
+                        height: 1.42,
+                      ),
                 children: [
                   if (separator >= 0)
                     TextSpan(
                       text: text.substring(0, separator + 1),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: ThemeController.instance.isRetroMode
+                          ? GoogleFonts.vt323(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w700,
+                            )
+                          : const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
                     ),
                   TextSpan(
                     text: separator >= 0 ? text.substring(separator + 1) : text,
@@ -1380,7 +1724,12 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                   width: 116,
                   height: 116,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
+                    shape: ThemeController.instance.isRetroMode
+                        ? BoxShape.rectangle
+                        : BoxShape.circle,
+                    border: ThemeController.instance.isRetroMode
+                        ? Border.all(color: Colors.black, width: 3)
+                        : null,
                     color: GarantieHeldApp.emerald.withValues(alpha: 0.14),
                     boxShadow: [
                       BoxShadow(
@@ -1390,7 +1739,7 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                       ),
                     ],
                   ),
-                  child: const Icon(
+                  child: const RetroIcon(
                     Icons.download_done_rounded,
                     color: GarantieHeldApp.emerald,
                     size: 68,
@@ -1486,7 +1835,7 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
           IconButton(
             tooltip: 'Beleg teilen',
             onPressed: _shareWarranty,
-            icon: const Icon(Icons.ios_share),
+            icon: const RetroIcon(Icons.ios_share),
             color: const Color(0xFF10B981),
           ),
         ],
@@ -1499,44 +1848,64 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
               children: [
                 GestureDetector(
                   onTap: _showReceiptFullscreen,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: _isPdfPath(receiptPath)
-                        ? Container(
-                            height: 180,
-                            width: double.infinity,
-                            color: GarantieHeldApp.surface,
-                            child: const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.picture_as_pdf_rounded,
-                                  color: Color(0xFFF87171),
-                                  size: 54,
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'PDF-Beleg öffnen',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                              ],
+                  child: Container(
+                    decoration: ThemeController.instance.isRetroMode
+                        ? const BoxDecoration(
+                            border: Border.fromBorderSide(
+                              BorderSide(color: Colors.black, width: 3),
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black,
+                                offset: Offset(3, 3),
+                                blurRadius: 0,
+                              ),
+                            ],
                           )
-                        : Image.file(
-                            File(receiptPath),
-                            key: ValueKey(
-                              '${receiptPath}_$_receiptImageRevision',
-                            ),
-                            height: 240,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const SizedBox(
-                              height: 120,
-                              child: Center(
-                                child: Text('Belegfoto nicht verfügbar'),
+                        : null,
+                    child: ClipRRect(
+                      borderRadius: ThemeController.instance.isRetroMode
+                          ? BorderRadius.zero
+                          : BorderRadius.circular(18),
+                      child: _isPdfPath(receiptPath)
+                          ? Container(
+                              height: 180,
+                              width: double.infinity,
+                              color: GarantieHeldApp.surface,
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  RetroIcon(
+                                    Icons.picture_as_pdf_rounded,
+                                    color: Color(0xFFF87171),
+                                    size: 54,
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'PDF-Beleg öffnen',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Image.file(
+                              File(receiptPath),
+                              key: ValueKey(
+                                '${receiptPath}_$_receiptImageRevision',
+                              ),
+                              height: 240,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox(
+                                height: 120,
+                                child: Center(
+                                  child: Text('Belegfoto nicht verfügbar'),
+                                ),
                               ),
                             ),
-                          ),
+                    ),
                   ),
                 ),
                 if (!_isPdfPath(receiptPath))
@@ -1545,16 +1914,30 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                     bottom: 12,
                     child: Material(
                       color: const Color.fromRGBO(0, 0, 0, 0.5),
-                      shape: const CircleBorder(),
+                      shape: ThemeController.instance.isRetroMode
+                          ? const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.zero,
+                              side: BorderSide(color: Colors.black, width: 3),
+                            )
+                          : const CircleBorder(),
                       child: IconButton(
                         tooltip: 'Kassenbon auf Gerät speichern',
                         onPressed: _busy ? null : _exportReceipt,
-                        icon: const Icon(Icons.download_rounded),
+                        icon: const RetroIcon(Icons.download_rounded),
                         color: Colors.white,
                         iconSize: 24,
                         style: IconButton.styleFrom(
                           backgroundColor: const Color.fromRGBO(0, 0, 0, 0.5),
                           fixedSize: const Size(48, 48),
+                          shape: ThemeController.instance.isRetroMode
+                              ? const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  side: BorderSide(
+                                    color: Colors.black,
+                                    width: 3,
+                                  ),
+                                )
+                              : const CircleBorder(),
                         ),
                       ),
                     ),
@@ -1566,7 +1949,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: const Color.fromRGBO(0, 0, 0, 0.5),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: ThemeController.instance.isRetroMode
+                            ? BorderRadius.zero
+                            : BorderRadius.circular(20),
                       ),
                       child: Padding(
                         padding: EdgeInsets.symmetric(
@@ -1601,17 +1986,28 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                     child: Container(
                       width: 62,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: ThemeController.instance.isRetroMode
+                            ? BorderRadius.zero
+                            : BorderRadius.circular(10),
                         border: Border.all(
                           color: index == _receiptIndex
                               ? GarantieHeldApp.emerald
                               : Colors.transparent,
-                          width: 2,
+                          width: ThemeController.instance.isRetroMode ? 3 : 2,
                         ),
+                        boxShadow: ThemeController.instance.isRetroMode
+                            ? const [
+                                BoxShadow(
+                                  color: Colors.black,
+                                  offset: Offset(3, 3),
+                                  blurRadius: 0,
+                                ),
+                              ]
+                            : null,
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: _isPdfPath(receiptPaths[index])
-                          ? const Icon(
+                          ? const RetroIcon(
                               Icons.picture_as_pdf_rounded,
                               color: Color(0xFFF87171),
                             )
@@ -1644,7 +2040,7 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
               trailing: IconButton(
                 tooltip: 'Adresse in Google Maps öffnen',
                 onPressed: () => _openStoreLocation(warranty.storeAddress),
-                icon: const Icon(Icons.map_outlined),
+                icon: const RetroIcon(Icons.map_outlined),
                 color: GarantieHeldApp.emerald,
               ),
             ),
@@ -1716,7 +2112,21 @@ class _WarrantyDetailTile extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: GarantieHeldApp.surfaceFor(context),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: ThemeController.instance.isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(14),
+        border: ThemeController.instance.isRetroMode
+            ? Border.all(color: Colors.black, width: 3)
+            : null,
+        boxShadow: ThemeController.instance.isRetroMode
+            ? const [
+                BoxShadow(
+                  color: Colors.black,
+                  offset: Offset(3, 3),
+                  blurRadius: 0,
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -1764,8 +2174,15 @@ class _WarrantyStatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        borderRadius: ThemeController.instance.isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(30),
+        border: Border.all(
+          color: ThemeController.instance.isRetroMode
+              ? Colors.black
+              : color.withValues(alpha: 0.35),
+          width: ThemeController.instance.isRetroMode ? 3 : 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1773,7 +2190,12 @@ class _WarrantyStatusBadge extends StatelessWidget {
           Container(
             width: 7,
             height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: color,
+              shape: ThemeController.instance.isRetroMode
+                  ? BoxShape.rectangle
+                  : BoxShape.circle,
+            ),
           ),
           const SizedBox(width: 6),
           Text(
@@ -1853,50 +2275,80 @@ class _ProtectedValueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRetroMode = ThemeController.instance.isRetroMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF059669), Color(0xFF047857)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF059669).withOpacity(0.24),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        color: isRetroMode ? const Color(0xFF1A0933) : null,
+        gradient: isRetroMode
+            ? null
+            : const LinearGradient(
+                colors: [Color(0xFF059669), Color(0xFF047857)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        borderRadius: isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(24),
+        border: isRetroMode ? Border.all(color: Colors.black, width: 3) : null,
+        boxShadow: isRetroMode
+            ? const [
+                BoxShadow(
+                  color: Colors.black,
+                  offset: Offset(4, 4),
+                  blurRadius: 0,
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF059669).withOpacity(0.24),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.verified_user_outlined, size: 18),
+              RetroIcon(
+                Icons.verified_user_outlined,
+                size: 18,
+                color: isRetroMode ? const Color(0xFF00E5FF) : null,
+              ),
               const SizedBox(width: 8),
               Text(
                 'GESAMTWERT GESCHÜTZT',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.86),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.1,
-                ),
+                style: isRetroMode
+                    ? GoogleFonts.pressStart2p(
+                        color: const Color(0xFFFFD700),
+                        fontSize: 8,
+                      )
+                    : TextStyle(
+                        color: Colors.white.withOpacity(0.86),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
+                      ),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             amount,
-            style: const TextStyle(
-              fontSize: 34,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.8,
-            ),
+            style: isRetroMode
+                ? GoogleFonts.vt323(
+                    fontSize: 42,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF00FF66),
+                  )
+                : const TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8,
+                  ),
           ),
           const SizedBox(height: 22),
           Wrap(
@@ -1906,10 +2358,12 @@ class _ProtectedValueCard extends StatelessWidget {
               _CountBadge(
                 icon: Icons.shield_rounded,
                 label: '$activeCount aktiv',
+                color: isRetroMode ? const Color(0xFF00FF66) : Colors.white,
               ),
               _CountBadge(
                 icon: Icons.schedule_rounded,
                 label: '$expiringCount laufen bald ab',
+                color: isRetroMode ? const Color(0xFFFF007F) : Colors.white,
               ),
             ],
           ),
@@ -1920,25 +2374,39 @@ class _ProtectedValueCard extends StatelessWidget {
 }
 
 class _CountBadge extends StatelessWidget {
-  const _CountBadge({required this.icon, required this.label});
+  const _CountBadge({
+    required this.icon,
+    required this.label,
+    this.color = Colors.white,
+  });
 
   final IconData icon;
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
+    final isRetroMode = ThemeController.instance.isRetroMode;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.16),
-        borderRadius: BorderRadius.circular(30),
+        color: isRetroMode
+            ? const Color(0xFF121212)
+            : Colors.black.withOpacity(0.16),
+        borderRadius: isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(30),
+        border: isRetroMode ? Border.all(color: Colors.black, width: 2) : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15),
+          RetroIcon(icon, size: 15, color: color),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 12)),
+          Text(
+            label,
+            style: TextStyle(fontSize: isRetroMode ? 18 : 12, color: color),
+          ),
         ],
       ),
     );
@@ -1968,15 +2436,22 @@ class _WarrantyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRetroMode = ThemeController.instance.isRetroMode;
     final categoryVisual = CategoryVisuals.forCategory(warranty.category);
     final expired = warranty.isExpired;
     final remainingDays = warranty.remainingDays;
     final nearingExpiry = !expired && remainingDays < 30;
     final criticalExpiry = remainingDays < 7;
     final statusColor = criticalExpiry
-        ? Colors.redAccent
+        ? isRetroMode
+              ? const Color(0xFFFF007F)
+              : Colors.redAccent
         : nearingExpiry
-        ? const Color(0xFFF97316)
+        ? isRetroMode
+              ? const Color(0xFFFFD700)
+              : const Color(0xFFF97316)
+        : isRetroMode
+        ? const Color(0xFF00FF66)
         : GarantieHeldApp.emerald;
     final status = expired
         ? 'Abgelaufen'
@@ -1988,13 +2463,27 @@ class _WarrantyCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
-        color: GarantieHeldApp.surfaceFor(context),
-        borderRadius: BorderRadius.circular(20),
+        color: isRetroMode
+            ? const Color(0xFF1A0933)
+            : GarantieHeldApp.surfaceFor(context),
+        borderRadius: isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(
-            context,
-          ).colorScheme.onSurface.withValues(alpha: 0.06),
+          color: isRetroMode
+              ? Colors.black
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
+          width: isRetroMode ? 3 : 1,
         ),
+        boxShadow: isRetroMode
+            ? const [
+                BoxShadow(
+                  color: Colors.black,
+                  offset: Offset(4, 4),
+                  blurRadius: 0,
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -2002,14 +2491,21 @@ class _WarrantyCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: categoryVisual.color.withValues(
-                alpha: Theme.of(context).brightness == Brightness.dark
-                    ? 0.2
-                    : 0.12,
-              ),
-              borderRadius: BorderRadius.circular(15),
+              color: isRetroMode
+                  ? const Color(0xFF121212)
+                  : categoryVisual.color.withValues(
+                      alpha: Theme.of(context).brightness == Brightness.dark
+                          ? 0.2
+                          : 0.12,
+                    ),
+              borderRadius: isRetroMode
+                  ? BorderRadius.zero
+                  : BorderRadius.circular(15),
+              border: isRetroMode
+                  ? Border.all(color: Colors.black, width: 2)
+                  : null,
             ),
-            child: Icon(categoryVisual.icon, color: categoryVisual.color),
+            child: RetroIcon(categoryVisual.icon, color: categoryVisual.color),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -2020,10 +2516,16 @@ class _WarrantyCard extends StatelessWidget {
                   warranty.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
+                  style: isRetroMode
+                      ? GoogleFonts.pressStart2p(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 8,
+                          color: const Color(0xFFFFD700),
+                        )
+                      : const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -2052,10 +2554,17 @@ class _WarrantyCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: criticalExpiry
+                          color: isRetroMode
+                              ? const Color(0xFF121212)
+                              : criticalExpiry
                               ? Colors.red.withValues(alpha: 0.2)
                               : statusColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: isRetroMode
+                              ? BorderRadius.zero
+                              : BorderRadius.circular(20),
+                          border: isRetroMode
+                              ? Border.all(color: statusColor, width: 1)
+                              : null,
                         ),
                         child: Text(
                           status,
@@ -2077,7 +2586,9 @@ class _WarrantyCard extends StatelessWidget {
           const SizedBox(width: 7),
           InkWell(
             onTap: onPreview,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: ThemeController.instance.isRetroMode
+                ? BorderRadius.zero
+                : BorderRadius.circular(10),
             child: _receiptThumbnail(context),
           ),
           const SizedBox(width: 6),
@@ -2093,12 +2604,22 @@ class _WarrantyCard extends StatelessWidget {
                     children: [
                       _CardQuickAction(
                         tooltip: 'Teilen',
-                        icon: Icons.share_outlined,
+                        icon: ThemeController.instance.isRetroMode
+                            ? Icons.share
+                            : Icons.share_outlined,
+                        color: ThemeController.instance.isRetroMode
+                            ? const Color(0xFF00E5FF)
+                            : GarantieHeldApp.emerald,
                         onTap: onShare,
                       ),
                       _CardQuickAction(
                         tooltip: 'Details',
-                        icon: Icons.visibility_outlined,
+                        icon: ThemeController.instance.isRetroMode
+                            ? Icons.visibility
+                            : Icons.visibility_outlined,
+                        color: ThemeController.instance.isRetroMode
+                            ? const Color(0xFFFFD700)
+                            : GarantieHeldApp.emerald,
                         onTap: onDetails,
                       ),
                     ],
@@ -2109,13 +2630,22 @@ class _WarrantyCard extends StatelessWidget {
                     children: [
                       _CardQuickAction(
                         tooltip: 'Bearbeiten',
-                        icon: Icons.edit_outlined,
+                        icon: ThemeController.instance.isRetroMode
+                            ? Icons.edit
+                            : Icons.edit_outlined,
+                        color: ThemeController.instance.isRetroMode
+                            ? const Color(0xFF00FF66)
+                            : GarantieHeldApp.emerald,
                         onTap: onEdit,
                       ),
                       _CardQuickAction(
                         tooltip: 'Löschen',
-                        icon: Icons.delete_outline_rounded,
-                        color: const Color(0xFFF87171),
+                        icon: ThemeController.instance.isRetroMode
+                            ? Icons.delete
+                            : Icons.delete_outline_rounded,
+                        color: ThemeController.instance.isRetroMode
+                            ? const Color(0xFFFF3030)
+                            : const Color(0xFFF87171),
                         onTap: onDelete,
                       ),
                     ],
@@ -2133,7 +2663,9 @@ class _WarrantyCard extends StatelessWidget {
     final filePath = warranty.imagePath;
     final isPdf = filePath.toLowerCase().endsWith('.pdf');
     return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: ThemeController.instance.isRetroMode
+          ? BorderRadius.zero
+          : BorderRadius.circular(10),
       child: SizedBox(
         width: 56,
         height: 56,
@@ -2142,7 +2674,7 @@ class _WarrantyCard extends StatelessWidget {
                 color: Theme.of(context).brightness == Brightness.dark
                     ? const Color(0xFF0F172A)
                     : const Color(0xFFF1F5F9),
-                child: Icon(
+                child: RetroIcon(
                   Icons.receipt_long_outlined,
                   color: Colors.white54,
                   size: 24,
@@ -2156,7 +2688,7 @@ class _WarrantyCard extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
+                    RetroIcon(
                       Icons.picture_as_pdf_rounded,
                       color: Color(0xFFF87171),
                       size: 25,
@@ -2178,7 +2710,7 @@ class _WarrantyCard extends StatelessWidget {
                   color: Theme.of(context).brightness == Brightness.dark
                       ? const Color(0xFF0F172A)
                       : const Color(0xFFF1F5F9),
-                  child: Icon(
+                  child: RetroIcon(
                     Icons.broken_image_outlined,
                     color: Colors.white54,
                     size: 22,
@@ -2205,20 +2737,36 @@ class _CardQuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRetroMode = ThemeController.instance.isRetroMode;
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Theme.of(context).brightness == Brightness.dark
+        color: isRetroMode
+            ? const Color(0xFF121212)
+            : Theme.of(context).brightness == Brightness.dark
             ? const Color(0xFF0F172A)
             : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(9),
+        shape: RoundedRectangleBorder(
+          borderRadius: isRetroMode
+              ? BorderRadius.zero
+              : BorderRadius.circular(9),
+          side: isRetroMode
+              ? const BorderSide(color: Colors.black, width: 2)
+              : BorderSide.none,
+        ),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: isRetroMode
+              ? BorderRadius.zero
+              : BorderRadius.circular(9),
           child: SizedBox(
             width: 28,
             height: 28,
-            child: Icon(icon, color: color, size: 17),
+            child: Center(
+              child: isRetroMode
+                  ? Icon(icon, color: color, size: 17)
+                  : RetroIcon(icon, color: color, size: 17),
+            ),
           ),
         ),
       ),
@@ -2235,11 +2783,16 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 34),
       decoration: BoxDecoration(
         color: GarantieHeldApp.surfaceFor(context),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: ThemeController.instance.isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(22),
+        border: ThemeController.instance.isRetroMode
+            ? Border.all(color: Colors.black, width: 3)
+            : null,
       ),
       child: Column(
         children: [
-          Icon(
+          RetroIcon(
             Icons.receipt_long_rounded,
             size: 42,
             color: Theme.of(
@@ -2277,11 +2830,20 @@ class _SearchEmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       decoration: BoxDecoration(
         color: GarantieHeldApp.surfaceFor(context),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: ThemeController.instance.isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(20),
+        border: ThemeController.instance.isRetroMode
+            ? Border.all(color: Colors.black, width: 3)
+            : null,
       ),
       child: const Column(
         children: [
-          Icon(Icons.search_off_rounded, size: 34, color: Color(0xFF94A3B8)),
+          RetroIcon(
+            Icons.search_off_rounded,
+            size: 34,
+            color: Color(0xFF94A3B8),
+          ),
           SizedBox(height: 10),
           Text('Keine passende Garantie gefunden.'),
         ],
@@ -2303,7 +2865,7 @@ class _LoadError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            const RetroIcon(
               Icons.storage_rounded,
               size: 42,
               color: Color(0xFFF87171),
@@ -2605,7 +3167,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         IconButton(
           tooltip: 'Datum auswählen',
           onPressed: _selectPurchaseDate,
-          icon: const Icon(Icons.calendar_month_rounded),
+          icon: const RetroIcon(Icons.calendar_month_rounded),
         ),
         if (_purchaseDateController.text.isNotEmpty)
           IconButton(
@@ -2617,7 +3179,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                 _dateError = false;
               });
             },
-            icon: const Icon(Icons.clear),
+            icon: const RetroIcon(Icons.clear),
           ),
       ],
     );
@@ -2661,8 +3223,13 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       context: context,
       useSafeArea: true,
       backgroundColor: GarantieHeldApp.surfaceFor(context),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      shape: RoundedRectangleBorder(
+        borderRadius: ThemeController.instance.isRetroMode
+            ? BorderRadius.zero
+            : const BorderRadius.vertical(top: Radius.circular(22)),
+        side: ThemeController.instance.isRetroMode
+            ? const BorderSide(color: Colors.black, width: 3)
+            : BorderSide.none,
       ),
       builder: (sheetContext) => SafeArea(
         bottom: true,
@@ -2676,14 +3243,15 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.28),
-                  borderRadius: BorderRadius.circular(4),
+              if (!ThemeController.instance.isRetroMode)
+                Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.28),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
-              ),
               const SizedBox(height: 14),
               const Text(
                 'Belegfoto hinzufügen',
@@ -2691,7 +3259,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
               ),
               const SizedBox(height: 8),
               ListTile(
-                leading: const Icon(
+                leading: const RetroIcon(
                   Icons.camera_alt_rounded,
                   color: GarantieHeldApp.emerald,
                 ),
@@ -2700,7 +3268,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                     Navigator.of(sheetContext).pop(_ReceiptUploadSource.camera),
               ),
               ListTile(
-                leading: const Icon(
+                leading: const RetroIcon(
                   Icons.photo_library_rounded,
                   color: GarantieHeldApp.emerald,
                 ),
@@ -2710,7 +3278,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                 ).pop(_ReceiptUploadSource.gallery),
               ),
               ListTile(
-                leading: const Icon(
+                leading: const RetroIcon(
                   Icons.picture_as_pdf_rounded,
                   color: GarantieHeldApp.emerald,
                 ),
@@ -2820,7 +3388,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
           : IconButton(
               tooltip: 'Feld leeren',
               onPressed: controller.clear,
-              icon: const Icon(Icons.clear),
+              icon: const RetroIcon(Icons.clear),
             ),
     );
   }
@@ -2856,12 +3424,16 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
               leading: IconButton(
                 tooltip: 'Zurück',
                 onPressed: _handleBackNavigation,
-                icon: const Icon(Icons.arrow_back_rounded),
+                icon: const RetroIcon(Icons.arrow_back_rounded),
               ),
               title: Text(
-                isEditing ? 'Garantie bearbeiten' : 'Garantie bestätigen',
-                style: const TextStyle(
-                  fontSize: 18,
+                ThemeController.instance.isRetroMode
+                    ? 'BELEG ERFASSEN'
+                    : isEditing
+                    ? 'Garantie bearbeiten'
+                    : 'Garantie bestätigen',
+                style: TextStyle(
+                  fontSize: ThemeController.instance.isRetroMode ? 11 : 18,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -2901,59 +3473,68 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: GarantieHeldApp.surfaceFor(context),
-                                  borderRadius: BorderRadius.circular(16),
+                          if (!isEditing) ...[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: GarantieHeldApp.surfaceFor(context),
+                                    borderRadius:
+                                        ThemeController.instance.isRetroMode
+                                        ? BorderRadius.zero
+                                        : BorderRadius.circular(16),
+                                  ),
+                                  child: const RetroIcon(
+                                    Icons.receipt_long_rounded,
+                                    color: GarantieHeldApp.emerald,
+                                    size: 28,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.receipt_long_rounded,
-                                  color: GarantieHeldApp.emerald,
-                                  size: 28,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'FAST GESCHAFFT!',
-                                      style: TextStyle(
-                                        color: GarantieHeldApp.emerald,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.2,
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'FAST GESCHAFFT!',
+                                        style: TextStyle(
+                                          color: GarantieHeldApp.emerald,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 1.2,
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Dein Beleg wurde erfasst',
-                                      style: TextStyle(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurface,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'Dein Beleg wurde erfasst',
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                          ],
                           if (previewPath.isNotEmpty)
                             Stack(
                               children: [
                                 GestureDetector(
                                   onTap: () => _showReceiptPreview(previewPath),
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius:
+                                        ThemeController.instance.isRetroMode
+                                        ? BorderRadius.zero
+                                        : BorderRadius.circular(16),
                                     child: _isPdfPath(previewPath)
                                         ? Container(
                                             height: 180,
@@ -2963,7 +3544,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                                               mainAxisAlignment:
                                                   MainAxisAlignment.center,
                                               children: [
-                                                Icon(
+                                                RetroIcon(
                                                   Icons.picture_as_pdf_rounded,
                                                   color: Color(0xFFF87171),
                                                   size: 48,
@@ -3005,13 +3586,21 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                                   right: 10,
                                   child: Material(
                                     color: const Color(0xB31E293B),
-                                    shape: const CircleBorder(),
+                                    shape: ThemeController.instance.isRetroMode
+                                        ? const RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.zero,
+                                            side: BorderSide(
+                                              color: Colors.black,
+                                              width: 3,
+                                            ),
+                                          )
+                                        : const CircleBorder(),
                                     child: IconButton(
                                       tooltip: 'Belegdatei hinzufügen',
                                       onPressed: _receiptPaths.length >= 3
                                           ? null
                                           : _chooseReceiptImage,
-                                      icon: const Icon(Icons.add_rounded),
+                                      icon: const RetroIcon(Icons.add_rounded),
                                       color: Colors.white,
                                     ),
                                   ),
@@ -3022,19 +3611,40 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                             GestureDetector(
                               onTap: _chooseReceiptImage,
                               child: CustomPaint(
-                                foregroundPainter:
-                                    _DashedReceiptBorderPainter(),
+                                foregroundPainter: _DashedReceiptBorderPainter(
+                                  isRetroMode:
+                                      ThemeController.instance.isRetroMode,
+                                ),
                                 child: Container(
                                   width: double.infinity,
                                   height: 180,
                                   decoration: BoxDecoration(
                                     color: GarantieHeldApp.surfaceFor(context),
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius:
+                                        ThemeController.instance.isRetroMode
+                                        ? BorderRadius.zero
+                                        : BorderRadius.circular(16),
+                                    border: ThemeController.instance.isRetroMode
+                                        ? Border.all(
+                                            color: Colors.black,
+                                            width: 3,
+                                          )
+                                        : null,
+                                    boxShadow:
+                                        ThemeController.instance.isRetroMode
+                                        ? const [
+                                            BoxShadow(
+                                              color: Colors.black,
+                                              offset: Offset(3, 3),
+                                              blurRadius: 0,
+                                            ),
+                                          ]
+                                        : null,
                                   ),
                                   child: const Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
+                                      RetroIcon(
                                         Icons.add_a_photo_rounded,
                                         color: GarantieHeldApp.emerald,
                                         size: 34,
@@ -3075,13 +3685,16 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                                             color: GarantieHeldApp.surfaceFor(
                                               context,
                                             ),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
+                                            borderRadius:
+                                                ThemeController
+                                                    .instance
+                                                    .isRetroMode
+                                                ? BorderRadius.zero
+                                                : BorderRadius.circular(10),
                                           ),
                                           clipBehavior: Clip.antiAlias,
                                           child: _isPdfPath(receiptPath)
-                                              ? const Icon(
+                                              ? const RetroIcon(
                                                   Icons.picture_as_pdf_rounded,
                                                   color: Color(0xFFF87171),
                                                   size: 30,
@@ -3115,7 +3728,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                                                   : _receiptPaths.first,
                                             );
                                           }),
-                                          child: const Icon(
+                                          child: const RetroIcon(
                                             Icons.cancel,
                                             size: 18,
                                             color: Color(0xFFF87171),
@@ -3430,34 +4043,54 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     required String hintText,
     Widget? suffixIcon,
     String? errorText,
-  }) => InputDecoration(
-    hintText: hintText,
-    errorText: errorText,
-    filled: true,
-    fillColor: GarantieHeldApp.surfaceFor(context),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-    suffixIcon: suffixIcon,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF334155)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF334155)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: GarantieHeldApp.emerald, width: 1.5),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFF87171)),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFF87171), width: 1.5),
-    ),
-  );
+  }) {
+    final isRetroMode = ThemeController.instance.isRetroMode;
+    final borderRadius = isRetroMode
+        ? BorderRadius.zero
+        : BorderRadius.circular(12);
+    final normalBorder = BorderSide(
+      color: isRetroMode ? Colors.black : const Color(0xFF334155),
+      width: isRetroMode ? 3 : 1,
+    );
+    final focusBorder = BorderSide(
+      color: isRetroMode ? const Color(0xFF00FF66) : GarantieHeldApp.emerald,
+      width: isRetroMode ? 3 : 1.5,
+    );
+    final errorBorder = BorderSide(
+      color: isRetroMode ? const Color(0xFFFF007F) : const Color(0xFFF87171),
+      width: isRetroMode ? 3 : 1,
+    );
+    return InputDecoration(
+      hintText: hintText,
+      errorText: errorText,
+      filled: true,
+      fillColor: isRetroMode
+          ? const Color(0xFF1A0933)
+          : GarantieHeldApp.surfaceFor(context),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      suffixIcon: suffixIcon,
+      border: OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: normalBorder,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: normalBorder,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: focusBorder,
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: errorBorder,
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: errorBorder,
+      ),
+    );
+  }
 
   String _categoryLabel(Category category) => switch (category) {
     Category.elektronik => 'Elektronik',
@@ -3483,99 +4116,128 @@ class _ReceiptAnalysisOverlay extends StatelessWidget {
   final bool isSuccess;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: const ColoredBox(color: Colors.black54),
-        ),
-        SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.all(24),
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xED111827),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.28),
-                      blurRadius: 28,
-                      offset: const Offset(0, 12),
+  Widget build(BuildContext context) {
+    final isRetroMode = ThemeController.instance.isRetroMode;
+    const arcadeGreen = Color(0xFF00FF66);
+    const arcadePink = Color(0xFFFF007F);
+    const arcadeYellow = Color(0xFFFFD700);
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: ColoredBox(
+              color: isRetroMode ? const Color(0xDD121212) : Colors.black54,
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isRetroMode
+                        ? const Color(0xFF1A0933)
+                        : const Color(0xED111827),
+                    borderRadius: isRetroMode
+                        ? BorderRadius.zero
+                        : BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isRetroMode ? Colors.black : Colors.white12,
+                      width: isRetroMode ? 3 : 1,
                     ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: isSuccess
-                          ? const Icon(
-                              Icons.check_circle_rounded,
-                              key: ValueKey('receipt-analysis-success'),
-                              color: GarantieHeldApp.emerald,
-                              size: 48,
-                            )
-                          : const SizedBox(
-                              key: ValueKey('receipt-analysis-progress'),
-                              width: 48,
-                              height: 48,
-                              child: CircularProgressIndicator(
-                                color: GarantieHeldApp.emerald,
-                                strokeWidth: 4,
-                              ),
+                    boxShadow: isRetroMode
+                        ? const [
+                            BoxShadow(
+                              color: Colors.black,
+                              blurRadius: 0,
+                              offset: Offset(4, 4),
                             ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'KI-Erfassung läuft...',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                          ]
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.28),
+                              blurRadius: 28,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: isSuccess
+                            ? const RetroIcon(
+                                Icons.check_circle_rounded,
+                                key: ValueKey('receipt-analysis-success'),
+                                color: arcadeGreen,
+                                size: 48,
+                              )
+                            : const SizedBox(
+                                key: ValueKey('receipt-analysis-progress'),
+                                width: 48,
+                                height: 48,
+                                child: CircularProgressIndicator(
+                                  color: arcadeGreen,
+                                  strokeWidth: 4,
+                                ),
+                              ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (child, animation) =>
-                          FadeTransition(opacity: animation, child: child),
-                      child: Text(
-                        statusText,
-                        key: ValueKey(statusText),
+                      const SizedBox(height: 24),
+                      Text(
+                        isRetroMode ? '8-BIT SCAN' : 'KI-Erfassung läuft...',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.white70,
+                        style: isRetroMode
+                            ? GoogleFonts.pressStart2p(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: arcadeYellow,
+                              )
+                            : const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                      ),
+                      const SizedBox(height: 10),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        transitionBuilder: (child, animation) =>
+                            FadeTransition(opacity: animation, child: child),
+                        child: Text(
+                          statusText,
+                          key: ValueKey(statusText),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: isRetroMode ? 21 : 14,
+                            color: isRetroMode ? arcadePink : Colors.white70,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      '(Versuch $step von 4)',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white38,
+                      const SizedBox(height: 14),
+                      Text(
+                        '(Versuch $step von 4)',
+                        style: TextStyle(
+                          fontSize: isRetroMode ? 18 : 12,
+                          color: isRetroMode ? arcadeGreen : Colors.white38,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _GeminiAnalysisErrorCard extends StatelessWidget {
@@ -3590,7 +4252,12 @@ class _GeminiAnalysisErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF35232A),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: ThemeController.instance.isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(16),
+        border: ThemeController.instance.isRetroMode
+            ? Border.all(color: Colors.black, width: 3)
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3598,7 +4265,10 @@ class _GeminiAnalysisErrorCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.info_outline_rounded, color: Color(0xFFFCA5A5)),
+              const RetroIcon(
+                Icons.info_outline_rounded,
+                color: Color(0xFFFCA5A5),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -3670,10 +4340,22 @@ class _WarrantyDurationPill extends StatelessWidget {
         color: selected
             ? GarantieHeldApp.emerald
             : GarantieHeldApp.surfaceFor(context),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: ThemeController.instance.isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(24),
+        shape: RoundedRectangleBorder(
+          borderRadius: ThemeController.instance.isRetroMode
+              ? BorderRadius.zero
+              : BorderRadius.circular(24),
+          side: ThemeController.instance.isRetroMode
+              ? const BorderSide(color: Colors.black, width: 3)
+              : BorderSide.none,
+        ),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: ThemeController.instance.isRetroMode
+              ? BorderRadius.zero
+              : BorderRadius.circular(24),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             child: Text(
@@ -3921,7 +4603,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
           leading: IconButton(
             tooltip: 'Zur Startseite',
             onPressed: _busy ? null : _leaveToHome,
-            icon: const Icon(Icons.arrow_back_rounded),
+            icon: const RetroIcon(Icons.arrow_back_rounded),
           ),
           actions: [
             IconButton(
@@ -3935,7 +4617,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                   controller == null || !controller.value.isInitialized || _busy
                   ? null
                   : _toggleFlash,
-              icon: Icon(switch (_flashMode) {
+              icon: RetroIcon(switch (_flashMode) {
                 FlashMode.off => Icons.flash_off,
                 FlashMode.always || FlashMode.torch => Icons.flash_on,
                 FlashMode.auto => Icons.flash_auto,
@@ -3944,7 +4626,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
             IconButton(
               tooltip: 'Foto aus Galerie laden',
               onPressed: _busy ? null : _pickFromGallery,
-              icon: const Icon(Icons.photo_library_outlined),
+              icon: const RetroIcon(Icons.photo_library_outlined),
             ),
             Padding(
               padding: const EdgeInsets.only(right: 12),
@@ -3967,7 +4649,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.no_photography_outlined, size: 48),
+                      const RetroIcon(Icons.no_photography_outlined, size: 48),
                       const SizedBox(height: 14),
                       Text(_error!, textAlign: TextAlign.center),
                       const SizedBox(height: 10),
@@ -3983,7 +4665,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                         const SizedBox(height: 8),
                         TextButton.icon(
                           onPressed: openAppSettings,
-                          icon: const Icon(Icons.settings_outlined),
+                          icon: const RetroIcon(Icons.settings_outlined),
                           label: const Text('Einstellungen öffnen'),
                         ),
                       ],
@@ -4005,6 +4687,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   Widget _buildCameraScanner(CameraController controller) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isRetroMode = ThemeController.instance.isRetroMode;
         final guideWidth = constraints.maxWidth * 0.86;
         final guideHeight = constraints.maxHeight * 0.60;
         final guideRect = Rect.fromCenter(
@@ -4022,10 +4705,16 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
             _buildFullScreenPreview(controller, constraints.biggest),
             Positioned.fill(
               child: CustomPaint(
-                painter: _ScannerShadePainter(guideRect: guideRect),
+                painter: _ScannerShadePainter(
+                  guideRect: guideRect,
+                  isRetroMode: isRetroMode,
+                ),
               ),
             ),
-            Positioned.fromRect(rect: guideRect, child: const _ScannerGuide()),
+            Positioned.fromRect(
+              rect: guideRect,
+              child: _ScannerGuide(isRetroMode: isRetroMode),
+            ),
             Positioned(
               left: 24,
               right: 24,
@@ -4061,51 +4750,93 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                         button: true,
                         label: 'Kassenbon fotografieren',
                         child: InkWell(
-                          customBorder: const CircleBorder(),
+                          customBorder: isRetroMode
+                              ? const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero,
+                                )
+                              : const CircleBorder(),
                           onTap: _busy ? null : _captureAndRecognize,
-                          child: Container(
-                            width: 82,
-                            height: 82,
-                            padding: const EdgeInsets.all(5),
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: DecoratedBox(
-                              decoration: const BoxDecoration(
-                                color: GarantieHeldApp.emerald,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: _busy
-                                    ? const SizedBox.square(
-                                        dimension: 30,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 3,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.camera_alt_rounded,
-                                        size: 34,
-                                        color: Colors.white,
+                          child: isRetroMode
+                              ? Container(
+                                  width: 64,
+                                  height: 64,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF00FF66),
+                                    border: Border.fromBorderSide(
+                                      BorderSide(color: Colors.black, width: 3),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black,
+                                        offset: Offset(3, 3),
+                                        blurRadius: 0,
                                       ),
-                              ),
-                            ),
-                          ),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: _busy
+                                        ? const SizedBox.square(
+                                            dimension: 26,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 3,
+                                              color: Colors.black,
+                                            ),
+                                          )
+                                        : const RetroIcon(
+                                            Icons.camera_alt_rounded,
+                                            size: 34,
+                                            color: Colors.black,
+                                          ),
+                                  ),
+                                )
+                              : Container(
+                                  width: 82,
+                                  height: 82,
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: DecoratedBox(
+                                    decoration: const BoxDecoration(
+                                      color: GarantieHeldApp.emerald,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: _busy
+                                          ? const SizedBox.square(
+                                              dimension: 30,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 3,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const RetroIcon(
+                                              Icons.camera_alt_rounded,
+                                              size: 34,
+                                              color: Colors.white,
+                                            ),
+                                    ),
+                                  ),
+                                ),
                         ),
                       ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
                         onPressed: _busy ? null : _continueManually,
-                        icon: const Icon(Icons.edit_note_rounded, size: 19),
+                        icon: const RetroIcon(
+                          Icons.edit_note_rounded,
+                          size: 19,
+                        ),
                         label: const Text('Manuell eingeben  →'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           backgroundColor: const Color(0x991E293B),
-                          side: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
+                          side: ThemeController.instance.isRetroMode
+                              ? const BorderSide(color: Colors.black, width: 3)
+                              : BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 18,
                             vertical: 12,
@@ -4130,8 +4861,15 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: GarantieHeldApp.surface,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: Colors.white12),
+                        borderRadius: ThemeController.instance.isRetroMode
+                            ? BorderRadius.zero
+                            : BorderRadius.circular(22),
+                        border: Border.all(
+                          color: ThemeController.instance.isRetroMode
+                              ? Colors.black
+                              : Colors.white12,
+                          width: ThemeController.instance.isRetroMode ? 3 : 1,
+                        ),
                         boxShadow: const [
                           BoxShadow(
                             color: Colors.black38,
@@ -4198,23 +4936,38 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
 }
 
 class _ScannerGuide extends StatelessWidget {
-  const _ScannerGuide();
+  const _ScannerGuide({required this.isRetroMode});
+
+  final bool isRetroMode;
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(child: CustomPaint(painter: _ScannerCornersPainter()));
+    return IgnorePointer(
+      child: CustomPaint(
+        painter: _ScannerCornersPainter(isRetroMode: isRetroMode),
+      ),
+    );
   }
 }
 
 class _DashedReceiptBorderPainter extends CustomPainter {
+  const _DashedReceiptBorderPainter({required this.isRetroMode});
+
+  final bool isRetroMode;
+
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(1, 1, size.width - 2, size.height - 2);
     final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16)));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          rect,
+          isRetroMode ? Radius.zero : const Radius.circular(16),
+        ),
+      );
     final paint = Paint()
       ..color = GarantieHeldApp.emerald.withValues(alpha: 0.72)
-      ..strokeWidth = 1.5
+      ..strokeWidth = isRetroMode ? 3 : 1.5
       ..style = PaintingStyle.stroke;
 
     for (final metric in path.computeMetrics()) {
@@ -4229,20 +4982,29 @@ class _DashedReceiptBorderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DashedReceiptBorderPainter oldDelegate) =>
-      false;
+      oldDelegate.isRetroMode != isRetroMode;
 }
 
 class _ScannerShadePainter extends CustomPainter {
-  const _ScannerShadePainter({required this.guideRect});
+  const _ScannerShadePainter({
+    required this.guideRect,
+    required this.isRetroMode,
+  });
 
   final Rect guideRect;
+  final bool isRetroMode;
 
   @override
   void paint(Canvas canvas, Size size) {
     final shade = Path()
       ..fillType = PathFillType.evenOdd
       ..addRect(Offset.zero & size)
-      ..addRRect(RRect.fromRectAndRadius(guideRect, const Radius.circular(20)));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          guideRect,
+          isRetroMode ? Radius.zero : const Radius.circular(20),
+        ),
+      );
     canvas.drawPath(
       shade,
       Paint()
@@ -4253,10 +5015,15 @@ class _ScannerShadePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScannerShadePainter oldDelegate) =>
-      oldDelegate.guideRect != guideRect;
+      oldDelegate.guideRect != guideRect ||
+      oldDelegate.isRetroMode != isRetroMode;
 }
 
 class _ScannerCornersPainter extends CustomPainter {
+  const _ScannerCornersPainter({required this.isRetroMode});
+
+  final bool isRetroMode;
+
   @override
   void paint(Canvas canvas, Size size) {
     const cornerLength = 30.0;
@@ -4264,8 +5031,25 @@ class _ScannerCornersPainter extends CustomPainter {
     final paint = Paint()
       ..color = GarantieHeldApp.emerald
       ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
+      ..strokeCap = isRetroMode ? StrokeCap.square : StrokeCap.round
       ..style = PaintingStyle.stroke;
+    if (isRetroMode) {
+      final path = Path()
+        ..moveTo(inset, cornerLength)
+        ..lineTo(inset, inset)
+        ..lineTo(cornerLength, inset)
+        ..moveTo(size.width - cornerLength, inset)
+        ..lineTo(size.width - inset, inset)
+        ..lineTo(size.width - inset, cornerLength)
+        ..moveTo(size.width - inset, size.height - cornerLength)
+        ..lineTo(size.width - inset, size.height - inset)
+        ..lineTo(size.width - cornerLength, size.height - inset)
+        ..moveTo(cornerLength, size.height - inset)
+        ..lineTo(inset, size.height - inset)
+        ..lineTo(inset, size.height - cornerLength);
+      canvas.drawPath(path, paint);
+      return;
+    }
     final path = Path()
       ..moveTo(inset, cornerLength)
       ..lineTo(inset, inset + 20)
@@ -4302,5 +5086,6 @@ class _ScannerCornersPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ScannerCornersPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _ScannerCornersPainter oldDelegate) =>
+      oldDelegate.isRetroMode != isRetroMode;
 }

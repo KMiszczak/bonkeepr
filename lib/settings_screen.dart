@@ -20,6 +20,7 @@ import 'google_drive_backup_service.dart';
 import 'notification_service.dart';
 import 'warranty_model.dart';
 import 'theme_controller.dart';
+import 'widgets/retro_icon.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -632,6 +633,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isRetroMode = ThemeController.instance.isRetroMode;
     final driveSubtitle = _driveStatusLoading
         ? 'Anmeldestatus wird geprüft …'
         : _driveAccount?.email ?? 'Nicht angemeldet';
@@ -694,8 +696,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 child: DropdownButtonFormField<ThemeMode>(
                   value: _themeMode,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Theme auswählen',
+                    border: OutlineInputBorder(
+                      borderRadius: isRetroMode
+                          ? BorderRadius.zero
+                          : BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isRetroMode ? Colors.black : Colors.grey,
+                        width: isRetroMode ? 3 : 1,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: isRetroMode
+                          ? BorderRadius.zero
+                          : BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isRetroMode ? Colors.black : Colors.grey,
+                        width: isRetroMode ? 3 : 1,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: isRetroMode
+                          ? BorderRadius.zero
+                          : BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isRetroMode
+                            ? const Color(0xFF00E5FF)
+                            : Theme.of(context).colorScheme.primary,
+                        width: isRetroMode ? 3 : 2,
+                      ),
+                    ),
                   ),
                   items: const [
                     DropdownMenuItem(
@@ -729,7 +760,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(driveSubtitle),
-                activeThumbColor: const Color(0xFF10B981),
+                activeThumbColor: isRetroMode
+                    ? const Color(0xFF00FF66)
+                    : const Color(0xFF10B981),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               ),
               _SettingsTile(
@@ -807,6 +840,7 @@ class _SettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final isRetroMode = ThemeController.instance.isRetroMode;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -815,18 +849,45 @@ class _SettingsSection extends StatelessWidget {
           child: Text(
             title,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
+              color: isRetroMode
+                  ? const Color(0xFFFFD700)
+                  : Theme.of(context).colorScheme.primary,
               fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.1,
             ),
           ),
         ),
-        Material(
-          color: dark ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          clipBehavior: Clip.antiAlias,
-          child: Column(children: children),
+        Container(
+          decoration: isRetroMode
+              ? const BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black,
+                      offset: Offset(4, 4),
+                      blurRadius: 0,
+                    ),
+                  ],
+                )
+              : null,
+          child: Material(
+            color: isRetroMode
+                ? const Color(0xFF1A0933)
+                : dark
+                ? const Color(0xFF1E293B)
+                : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: isRetroMode
+                  ? BorderRadius.zero
+                  : BorderRadius.circular(18),
+              side: isRetroMode
+                  ? const BorderSide(color: Colors.black, width: 3)
+                  : BorderSide.none,
+            ),
+            elevation: 0,
+            clipBehavior: Clip.antiAlias,
+            child: Column(children: children),
+          ),
         ),
       ],
     );
@@ -853,6 +914,7 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final isRetroMode = ThemeController.instance.isRetroMode;
     return Column(
       children: [
         ListTile(
@@ -873,7 +935,7 @@ class _SettingsTile extends StatelessWidget {
               trailing ??
               (onTap == null
                   ? null
-                  : Icon(
+                  : RetroIcon(
                       Icons.chevron_right_rounded,
                       color: Theme.of(
                         context,
@@ -891,7 +953,11 @@ class _SettingsTile extends StatelessWidget {
             child: Divider(
               height: 1,
               thickness: 1,
-              color: dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+              color: isRetroMode
+                  ? Colors.black
+                  : dark
+                  ? const Color(0xFF334155)
+                  : const Color(0xFFE2E8F0),
             ),
           ),
       ],
@@ -907,14 +973,26 @@ class _SettingsIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final isRetroMode = ThemeController.instance.isRetroMode;
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: dark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(12),
+        color: isRetroMode
+            ? const Color(0xFF121212)
+            : dark
+            ? const Color(0xFF0F172A)
+            : const Color(0xFFF1F5F9),
+        borderRadius: isRetroMode
+            ? BorderRadius.zero
+            : BorderRadius.circular(12),
+        border: isRetroMode ? Border.all(color: Colors.black, width: 2) : null,
       ),
-      child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 21),
+      child: RetroIcon(
+        icon,
+        color: Theme.of(context).colorScheme.primary,
+        size: 21,
+      ),
     );
   }
 }
