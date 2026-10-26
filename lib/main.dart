@@ -18,7 +18,9 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import 'category_visuals.dart';
 import 'database_helper.dart';
 import 'gemini_receipt_analyzer.dart';
 import 'notification_service.dart';
@@ -581,6 +583,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             fullText: '',
             productTitle: warranty.title,
             storeName: warranty.storeName,
+            storeAddress: warranty.storeAddress,
             productPrice: warranty.price,
             purchaseDate: warranty.purchaseDate,
             category: warranty.category.name,
@@ -1243,6 +1246,7 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
             fullText: '',
             productTitle: warranty.title,
             storeName: warranty.storeName,
+            storeAddress: warranty.storeAddress,
             productPrice: warranty.price,
             purchaseDate: warranty.purchaseDate,
             category: warranty.category.name,
@@ -1291,6 +1295,19 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
 
   Future<void> _shareWarranty() async {
     await _shareWarrantyData(context, widget.warranty);
+  }
+
+  Future<void> _openStoreLocation(String address) async {
+    final uri = Uri.https('www.google.com', '/maps/search/', {
+      'api': '1',
+      'query': address,
+    });
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) _showMessage('Google Maps konnte nicht geöffnet werden.');
+    } catch (_) {
+      _showMessage('Google Maps konnte nicht geöffnet werden.');
+    }
   }
 
   Future<void> _exportReceipt() async {
@@ -1612,27 +1629,25 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
             ],
             const SizedBox(height: 24),
           ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  warranty.title,
-                  style: const TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              _WarrantyStatusBadge(isActive: !warranty.isExpired),
-            ],
+          _WarrantyDetailTile(
+            label: 'Garantiestatus',
+            trailing: _WarrantyStatusBadge(isActive: !warranty.isExpired),
           ),
-          const SizedBox(height: 18),
           _WarrantyDetailTile(
             label: 'Händler',
             value: warranty.storeName.isEmpty ? '—' : warranty.storeName,
           ),
+          if (warranty.storeAddress.trim().isNotEmpty)
+            _WarrantyDetailTile(
+              label: 'Filialadresse',
+              value: warranty.storeAddress.trim(),
+              trailing: IconButton(
+                tooltip: 'Adresse in Google Maps öffnen',
+                onPressed: () => _openStoreLocation(warranty.storeAddress),
+                icon: const Icon(Icons.map_outlined),
+                color: GarantieHeldApp.emerald,
+              ),
+            ),
           _WarrantyDetailTile(label: 'Kaufpreis', value: price),
           _WarrantyDetailTile(label: 'Kaufdatum', value: date),
           _WarrantyDetailTile(
@@ -1688,10 +1703,11 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
 }
 
 class _WarrantyDetailTile extends StatelessWidget {
-  const _WarrantyDetailTile({required this.label, required this.value});
+  const _WarrantyDetailTile({required this.label, this.value, this.trailing});
 
   final String label;
-  final String value;
+  final String? value;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -1714,47 +1730,36 @@ class _WarrantyDetailTile extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+          if (value != null) ...[
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                value!,
+                textAlign: TextAlign.end,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
-          ),
+          ],
+          if (trailing != null) ...[
+            if (value != null) const SizedBox(width: 6),
+            trailing!,
+          ],
         ],
       ),
     );
   }
 }
 
-class _WarrantyStatusBadge extends StatefulWidget {
+class _WarrantyStatusBadge extends StatelessWidget {
   const _WarrantyStatusBadge({required this.isActive});
 
   final bool isActive;
 
   @override
-  State<_WarrantyStatusBadge> createState() => _WarrantyStatusBadgeState();
-}
-
-class _WarrantyStatusBadgeState extends State<_WarrantyStatusBadge>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final color = widget.isActive
-        ? GarantieHeldApp.emerald
-        : const Color(0xFFF87171);
+    final color = isActive ? GarantieHeldApp.emerald : const Color(0xFFF87171);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -1765,29 +1770,14 @@ class _WarrantyStatusBadgeState extends State<_WarrantyStatusBadge>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) => Opacity(
-              opacity: widget.isActive ? 0.55 + (_controller.value * 0.45) : 1,
-              child: Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.75),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(
-            widget.isActive ? 'Aktiv' : 'Abgelaufen',
+            isActive ? 'Aktiv' : 'Abgelaufen',
             style: TextStyle(
               color: color,
               fontSize: 11,
@@ -1845,6 +1835,7 @@ String _categoryLabel(Category category) => switch (category) {
   Category.haushalt => 'Haushalt',
   Category.moebel => 'Möbel',
   Category.werkzeug => 'Werkzeug',
+  Category.fahrzeug => 'Fahrzeug',
   Category.kleidung => 'Kleidung',
   Category.sonstiges => 'Sonstiges',
 };
@@ -1975,17 +1966,9 @@ class _WarrantyCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  static const _icons = <Category, IconData>{
-    Category.elektronik: Icons.devices,
-    Category.haushalt: Icons.kitchen_rounded,
-    Category.moebel: Icons.home_max_rounded,
-    Category.werkzeug: Icons.handyman_rounded,
-    Category.kleidung: Icons.checkroom_rounded,
-    Category.sonstiges: Icons.inventory_2_outlined,
-  };
-
   @override
   Widget build(BuildContext context) {
+    final categoryVisual = CategoryVisuals.forCategory(warranty.category);
     final expired = warranty.isExpired;
     final remainingDays = warranty.remainingDays;
     final nearingExpiry = !expired && remainingDays < 30;
@@ -2019,20 +2002,14 @@ class _WarrantyCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: GarantieHeldApp.surfaceFor(context),
+              color: categoryVisual.color.withValues(
+                alpha: Theme.of(context).brightness == Brightness.dark
+                    ? 0.2
+                    : 0.12,
+              ),
               borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: GarantieHeldApp.emerald.withValues(alpha: 0.16),
-                  blurRadius: 14,
-                  spreadRadius: 1,
-                ),
-              ],
             ),
-            child: Icon(
-              _icons[warranty.category] ?? Icons.inventory_2_rounded,
-              color: GarantieHeldApp.emerald,
-            ),
+            child: Icon(categoryVisual.icon, color: categoryVisual.color),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -2362,6 +2339,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   final _imagePicker = ImagePicker();
   late final TextEditingController _titleController;
   final _storeController = TextEditingController();
+  final _storeAddressController = TextEditingController();
   final _priceController = TextEditingController();
   final _serialNumberController = TextEditingController();
   final _purchaseDateController = TextEditingController();
@@ -2399,6 +2377,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         : _receiptPaths.first;
     _titleController = TextEditingController(text: existing?.title ?? '');
     _storeController.text = existing?.storeName ?? result.storeName;
+    _storeAddressController.text =
+        existing?.storeAddress ?? result.storeAddress;
     _serialNumberController.text = existing?.serialNumber ?? '';
     final initialPrice = existing?.price ?? result.productPrice;
     _priceController.text = initialPrice == null
@@ -2457,6 +2437,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         _scanResult = result.copyWith(imagePath: _scanResult.imagePath);
         _titleController.text = result.productTitle;
         _storeController.text = result.storeName;
+        _storeAddressController.text = result.storeAddress;
         _priceController.text = result.productPrice == null
             ? ''
             : result.productPrice!.toStringAsFixed(2).replaceAll('.', ',');
@@ -2544,6 +2525,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
         'haushalt' => Category.haushalt,
         'möbel' || 'moebel' => Category.moebel,
         'werkzeug' => Category.werkzeug,
+        'fahrzeug' || 'auto' => Category.fahrzeug,
         'kleidung' => Category.kleidung,
         _ => Category.sonstiges,
       };
@@ -2560,6 +2542,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   void dispose() {
     _titleController.dispose();
     _storeController.dispose();
+    _storeAddressController.dispose();
     _priceController.dispose();
     _serialNumberController.dispose();
     _purchaseDateController.dispose();
@@ -2578,6 +2561,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
           DateTime.now().microsecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       storeName: _storeController.text.trim(),
+      storeAddress: _storeAddressController.text.trim(),
       price: double.parse(_priceController.text.trim().replaceAll(',', '.')),
       purchaseDate: _purchaseDate!,
       warrantyMonths: _warrantyMonths,
@@ -3252,6 +3236,20 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                           ),
                           const SizedBox(height: 16),
                           const _WizardFieldLabel(
+                            'Filialadresse / Standort (optional)',
+                          ),
+                          TextFormField(
+                            controller: _storeAddressController,
+                            textCapitalization: TextCapitalization.words,
+                            minLines: 1,
+                            maxLines: 2,
+                            decoration: _wizardInputDecoration(
+                              hintText: 'Straße, Hausnummer, PLZ, Ort',
+                              suffixIcon: _clearButton(_storeAddressController),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const _WizardFieldLabel(
                             'Seriennummer / SN (optional)',
                           ),
                           TextFormField(
@@ -3466,6 +3464,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     Category.haushalt => 'Haushalt',
     Category.moebel => 'Möbel',
     Category.werkzeug => 'Werkzeug',
+    Category.fahrzeug => 'Fahrzeug',
     Category.kleidung => 'Kleidung',
     Category.sonstiges => 'Sonstiges',
   };

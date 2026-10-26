@@ -1,4 +1,12 @@
-enum Category { elektronik, haushalt, moebel, werkzeug, kleidung, sonstiges }
+enum Category {
+  elektronik,
+  haushalt,
+  moebel,
+  werkzeug,
+  fahrzeug,
+  kleidung,
+  sonstiges,
+}
 
 class Warranty {
   const Warranty({
@@ -10,6 +18,7 @@ class Warranty {
     required this.warrantyMonths,
     required this.category,
     required this.imagePath,
+    this.storeAddress = '',
     this.receiptPaths = const [],
     this.warrantyDays,
     this.serialNumber,
@@ -25,6 +34,7 @@ class Warranty {
   final int warrantyMonths;
   final Category category;
   final String imagePath;
+  final String storeAddress;
   final List<String> receiptPaths;
 
   List<String> get allReceiptPaths => receiptPaths.isNotEmpty
@@ -82,6 +92,7 @@ class Warranty {
     'warrantyMonths': warrantyMonths,
     'category': category.name,
     'imagePath': imagePath,
+    'storeAddress': storeAddress,
     'receiptPaths': receiptPaths.isEmpty ? null : receiptPaths.join('|'),
     'warrantyDays': warrantyDays,
     'serialNumber': serialNumber,
@@ -104,6 +115,7 @@ class Warranty {
         orElse: () => Category.sonstiges,
       ),
       imagePath: map['imagePath'] as String? ?? '',
+      storeAddress: map['storeAddress'] as String? ?? '',
       receiptPaths: storedPaths == null || storedPaths.isEmpty
           ? const []
           : storedPaths.split('|'),

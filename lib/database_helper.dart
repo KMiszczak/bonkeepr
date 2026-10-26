@@ -18,7 +18,7 @@ class DatabaseHelper {
     final databasesPath = await getDatabasesPath();
     final database = await openDatabase(
       path.join(databasesPath, _databaseName),
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
@@ -30,6 +30,7 @@ class DatabaseHelper {
             warrantyMonths INTEGER NOT NULL,
             category TEXT NOT NULL,
             imagePath TEXT NOT NULL,
+            storeAddress TEXT,
             receiptPaths TEXT,
             warrantyDays INTEGER,
             serialNumber TEXT,
@@ -47,6 +48,11 @@ class DatabaseHelper {
         if (oldVersion < 3) {
           await db.execute(
             'ALTER TABLE $_tableName ADD COLUMN receiptPaths TEXT',
+          );
+        }
+        if (oldVersion < 4) {
+          await db.execute(
+            'ALTER TABLE $_tableName ADD COLUMN storeAddress TEXT',
           );
         }
       },

@@ -84,6 +84,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'serialNumber',
       'notes',
       'reminderDaysBefore',
+      'storeAddress',
     ];
     final rows = <List<Object?>>[
       headers,
@@ -102,6 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           warranty.serialNumber ?? '',
           warranty.notes ?? '',
           warranty.reminderDaysBefore.toString(),
+          warranty.storeAddress,
         ],
     ];
     return '\uFEFF${const ListToCsvConverter(fieldDelimiter: ';').convert(rows)}';
@@ -251,6 +253,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           id: id,
           title: title,
           storeName: valueAt(row, 'storeName'),
+          storeAddress: valueAt(row, 'storeAddress'),
           price: price,
           purchaseDate: purchaseDate,
           warrantyMonths: months,

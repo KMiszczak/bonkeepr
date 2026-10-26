@@ -19,12 +19,13 @@ void main() {
 
     test('parses model JSON into wizard fields', () {
       final result = GeminiReceiptAnalyzer.parseResponse(
-        '''{"productName":"MOBILE ENERGIESTATION","storeName":"ALDI  SÜD","price":29.99,"purchaseDate":"2026-10-22","category":"Elektronik"}''',
+        '''{"productName":"MOBILE ENERGIESTATION","storeName":"ALDI  SÜD","storeAddress":"Musterstraße  12, 10115 Berlin","price":29.99,"purchaseDate":"2026-10-22","category":"Elektronik"}''',
         imagePath: 'receipts/bon.jpg',
       );
 
       expect(result.productTitle, 'MOBILE ENERGIESTATION');
       expect(result.storeName, 'ALDI SÜD');
+      expect(result.storeAddress, 'Musterstraße 12, 10115 Berlin');
       expect(result.productPrice, 29.99);
       expect(result.purchaseDate, DateTime(2026, 10, 22));
       expect(result.category, 'Elektronik');

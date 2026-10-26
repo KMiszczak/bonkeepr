@@ -44,8 +44,9 @@ void main() {
       price: 10,
       purchaseDate: DateTime(2026, 1, 31),
       warrantyMonths: 24,
-      category: Category.elektronik,
+      category: Category.fahrzeug,
       imagePath: 'receipt-one.jpg',
+      storeAddress: 'Musterstraße 12, 10115 Berlin',
       receiptPaths: const [
         'receipt-one.jpg',
         'receipt-two.pdf',
@@ -56,6 +57,8 @@ void main() {
 
     final restored = Warranty.fromMap(warranty.toMap());
     expect(restored.serialNumber, 'SN-12345');
+    expect(restored.category, Category.fahrzeug);
+    expect(restored.storeAddress, 'Musterstraße 12, 10115 Berlin');
     expect(restored.allReceiptPaths, warranty.allReceiptPaths);
   });
 
@@ -70,5 +73,6 @@ void main() {
       'receiptPaths': null,
     });
     expect(legacy.allReceiptPaths, ['receipt.jpg']);
+    expect(legacy.storeAddress, isEmpty);
   });
 }

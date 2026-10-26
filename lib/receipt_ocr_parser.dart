@@ -5,6 +5,7 @@ class ReceiptOcrResult {
     this.productPrice,
     this.purchaseDate,
     this.storeName = '',
+    this.storeAddress = '',
     this.productTitle = '',
     this.category = '',
     this.imagePath = '',
@@ -15,20 +16,22 @@ class ReceiptOcrResult {
   final double? productPrice;
   final DateTime? purchaseDate;
   final String storeName;
+  final String storeAddress;
   final String productTitle;
   final String category;
   final String imagePath;
 
   ReceiptOcrResult copyWith({String? imagePath}) => ReceiptOcrResult(
-        fullText: fullText,
-        totalAmount: totalAmount,
-        productPrice: productPrice,
-        purchaseDate: purchaseDate,
-        storeName: storeName,
-        productTitle: productTitle,
-        category: category,
-        imagePath: imagePath ?? this.imagePath,
-      );
+    fullText: fullText,
+    totalAmount: totalAmount,
+    productPrice: productPrice,
+    purchaseDate: purchaseDate,
+    storeName: storeName,
+    storeAddress: storeAddress,
+    productTitle: productTitle,
+    category: category,
+    imagePath: imagePath ?? this.imagePath,
+  );
 }
 
 class ReceiptOcrParser {
@@ -50,7 +53,10 @@ class ReceiptOcrParser {
     r'\b(?:bar|ec\s*[- ]?\s*karte|gegeben|rückgeld)\b',
     caseSensitive: false,
   );
-  static final _dueLinePattern = RegExp(r'\bzu\s+zahlen\b', caseSensitive: false);
+  static final _dueLinePattern = RegExp(
+    r'\bzu\s+zahlen\b',
+    caseSensitive: false,
+  );
   static final _currencyPattern = RegExp(r'\bEUR\b|€', caseSensitive: false);
   static final _addressLinePattern = RegExp(
     r'(?:straße|strasse|str\.?|weg|platz)|(?:^|\D)\d{5}(?:\D|$)',
@@ -84,10 +90,7 @@ class ReceiptOcrParser {
       product = _findProduct(lines, storeLineIndex: knownStore.$2);
     } else {
       final pricedProduct = _findProduct(lines, allowUnpricedFallback: false);
-      store = _findStoreFallback(
-        lines,
-        productLineIndex: pricedProduct.$3,
-      );
+      store = _findStoreFallback(lines, productLineIndex: pricedProduct.$3);
       product = pricedProduct.$3 != null
           ? pricedProduct
           : _findProduct(lines, storeLineIndex: store.$2);
@@ -235,7 +238,8 @@ class ReceiptOcrParser {
     }
 
     for (var lineIndex = searchStart; lineIndex < searchEnd; lineIndex++) {
-      if (lineIndex == storeLineIndex || lineIndex + 1 >= lines.length) continue;
+      if (lineIndex == storeLineIndex || lineIndex + 1 >= lines.length)
+        continue;
       final title = _productTitleFromLine(lines[lineIndex]);
       if (title == null ||
           lineIndex + 1 == storeLineIndex ||
@@ -251,9 +255,7 @@ class ReceiptOcrParser {
     }
 
     final fallbackStart = storeLineIndex == null ? 0 : storeLineIndex + 1;
-    for (var lineIndex = fallbackStart;
-        lineIndex < searchEnd;
-        lineIndex++) {
+    for (var lineIndex = fallbackStart; lineIndex < searchEnd; lineIndex++) {
       final title = _productTitleFromLine(lines[lineIndex]);
       if (title == null) continue;
       return (title, _findFallbackPrice(lines), lineIndex);
@@ -283,10 +285,11 @@ class ReceiptOcrParser {
     final suffix = priceMatch == null
         ? ''
         : line.substring(priceStart! + priceMatch.group(2)!.length);
-    final cleanedSuffix = RegExp(
-      r'^\s*(?:€|EUR)\s+\d+\s*$',
-      caseSensitive: false,
-    ).hasMatch(suffix)
+    final cleanedSuffix =
+        RegExp(
+          r'^\s*(?:€|EUR)\s+\d+\s*$',
+          caseSensitive: false,
+        ).hasMatch(suffix)
         ? ''
         : suffix.replaceAll(RegExp(r'€|\bEUR\b', caseSensitive: false), ' ');
     final title = priceMatch == null
@@ -312,15 +315,20 @@ class ReceiptOcrParser {
 
   static double? _findFallbackPrice(List<String> lines) {
     for (final line in lines) {
-      if (!_dueLinePattern.hasMatch(line) || _paymentLinePattern.hasMatch(line)) {
+      if (!_dueLinePattern.hasMatch(line) ||
+          _paymentLinePattern.hasMatch(line)) {
         continue;
       }
-      final amount = _amountAfterLabel(line, _dueLinePattern.firstMatch(line)!.end);
+      final amount = _amountAfterLabel(
+        line,
+        _dueLinePattern.firstMatch(line)!.end,
+      );
       if (amount != null) return amount;
     }
 
     for (final line in lines) {
-      if (!_currencyPattern.hasMatch(line) || _paymentLinePattern.hasMatch(line)) {
+      if (!_currencyPattern.hasMatch(line) ||
+          _paymentLinePattern.hasMatch(line)) {
         continue;
       }
       if (_aggregateLinePattern.hasMatch(line)) continue;
@@ -334,11 +342,10 @@ class ReceiptOcrParser {
   static double? _amountAfterLabel(String line, int labelEnd) {
     final withoutDates = line.replaceAll(_datePattern, ' ');
     final matches = _pricePattern.allMatches(withoutDates).toList();
-    final afterLabel = matches.where((match) => match.start >= labelEnd).toList();
+    final afterLabel = matches
+        .where((match) => match.start >= labelEnd)
+        .toList();
     final candidates = afterLabel.isNotEmpty ? afterLabel : matches;
     return candidates.isEmpty ? null : _parseAmount(candidates.last.group(2)!);
   }
 }
-
-
-

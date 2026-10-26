@@ -34,9 +34,10 @@ Du bist ein hochpräziser Assistent für eine Garantie-App. Analysiere das Foto 
 2. Extrahiere den genauen Einzelpreis dieses Produkts, bevorzugt direkt aus seiner Produktzeile. Verwende keinen Gesamtbetrag, wenn ein Einzelpreis verfügbar ist.
 3. Extrahiere den Händlernamen (z.B. ALDI, REWE, MediaMarkt).
 4. Extrahiere das Kaufdatum (Format: YYYY-MM-DD).
-5. Wähle eine passende Kategorie: Elektronik, Haushalt, Möbel, Werkzeug, Kleidung oder Sonstiges.
+5. Wähle eine passende Kategorie: Elektronik, Haushalt, Möbel, Werkzeug, Fahrzeug, Kleidung oder Sonstiges.
+6. Extrahiere optional die Filialadresse mit Straße, Hausnummer, PLZ und Ort aus der Kopfzeile des Belegs; wenn sie nicht erkennbar ist, verwende eine leere Zeichenfolge.
 Gib das Ergebnis ausschließlich als JSON-Objekt ohne Markdown zurück, mit genau diesen Feldern:
-{"productName":"...","storeName":"...","price":0.00,"purchaseDate":"YYYY-MM-DD","category":"Elektronik"}
+{"productName":"...","storeName":"...","storeAddress":"...","price":0.00,"purchaseDate":"YYYY-MM-DD","category":"Elektronik"}
 Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere Zeichenfolge und für den Preis 0.00. Erfinde keine Werte.
 ''';
 
@@ -201,6 +202,7 @@ Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere
 
     final productName = _stringValue(decoded['productName']);
     final storeName = _stringValue(decoded['storeName']);
+    final storeAddress = _stringValue(decoded['storeAddress']);
     final category = _stringValue(decoded['category']);
     final price = _priceValue(decoded['price']);
     final purchaseDate = DateTime.tryParse(
@@ -211,6 +213,7 @@ Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere
       fullText: response,
       productTitle: productName,
       storeName: storeName.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      storeAddress: storeAddress.replaceAll(RegExp(r'\s+'), ' ').trim(),
       productPrice: price != null && price > 0 ? price : null,
       purchaseDate: purchaseDate,
       category: category,
