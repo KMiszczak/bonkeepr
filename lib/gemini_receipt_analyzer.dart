@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,10 +7,23 @@ import 'package:http/http.dart' as http;
 import 'receipt_ocr_parser.dart';
 
 const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
-const String geminiModelName = String.fromEnvironment(
-  'GEMINI_MODEL',
-  defaultValue: 'gemini-3.8-flash',
-);
+const String geminiModelName = 'gemini-3.8-flash';
+const String geminiFallbackModelName = 'gemini-3.7-flash';
+const List<String> geminiModelCascade = [
+  geminiModelName,
+  geminiFallbackModelName,
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+];
+
+class GeminiModelCascadeException implements Exception {
+  const GeminiModelCascadeException(this.lastError);
+
+  final Object lastError;
+
+  @override
+  String toString() => 'Alle Gemini-Modelle fehlgeschlagen: $lastError';
+}
 
 class GeminiReceiptAnalyzer {
   static bool get hasApiKey => geminiApiKey.trim().isNotEmpty;
@@ -30,6 +42,18 @@ Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere
 
   static Future<ReceiptOcrResult> analyzeReceipt({
     required String imagePath,
+    void Function(String status)? onStatusUpdate,
+    void Function(int step)? onStepUpdate,
+  }) => analyzeReceiptWithFallback(
+    imagePath: imagePath,
+    onStatusUpdate: onStatusUpdate,
+    onStepUpdate: onStepUpdate,
+  );
+
+  static Future<ReceiptOcrResult> analyzeReceiptWithFallback({
+    required String imagePath,
+    void Function(String status)? onStatusUpdate,
+    void Function(int step)? onStepUpdate,
   }) async {
     if (!hasApiKey) {
       throw StateError(
@@ -39,48 +63,92 @@ Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere
 
     final imageFile = File(imagePath);
     final imageBytes = await imageFile.readAsBytes();
-    if (imageBytes.isEmpty) throw const FormatException('Das Bonfoto ist leer.');
+    if (imageBytes.isEmpty)
+      throw const FormatException('Das Bonfoto ist leer.');
 
     final mimeType = imagePath.toLowerCase().endsWith('.png')
         ? 'image/png'
         : 'image/jpeg';
+    final parts = [DataPart(mimeType, imageBytes)];
+    for (var index = 0; index < geminiModelCascade.length; index++) {
+      final step = index + 1;
+      final modelName = geminiModelCascade[index];
+      try {
+        onStepUpdate?.call(step);
+        onStatusUpdate?.call(_statusForStage(step));
+        print(
+          '[Gemini] [Stufe $step/4] Starte Analyse mit Modell: $modelName...',
+        );
+        final response = await _sendRequestWithModel(modelName, parts);
+        final responseText = response.text?.trim();
+        if (responseText == null || responseText.isEmpty) {
+          throw const FormatException(
+            'Gemini hat kein Ergebnis zurückgegeben.',
+          );
+        }
+        final result = parseResponse(responseText, imagePath: imagePath);
+        if (result.productTitle.trim().isEmpty &&
+            result.storeName.trim().isEmpty &&
+            result.productPrice == null &&
+            result.purchaseDate == null) {
+          throw const FormatException('Gemini hat keine Bon-Daten erkannt.');
+        }
+        onStatusUpdate?.call('Beleg erfolgreich analysiert! ✓');
+        print(
+          '[Gemini] [Stufe $step/4] Erfolgreich analysiert mit Modell: $modelName!',
+        );
+        return result;
+      } catch (error) {
+        print(
+          '[Gemini] [Stufe $step/4] Modell $modelName fehlgeschlagen '
+          '(Grund: $error). Wechsel zum nächsten Modell...',
+        );
+        if (step == geminiModelCascade.length) {
+          print('[Gemini] Alle 4 Modelle sind fehlgeschlagen.');
+          throw GeminiModelCascadeException(error);
+        }
+      }
+    }
+    throw StateError('Gemini-Modellkaskade endete ohne Ergebnis.');
+  }
+
+  static String _statusForStage(int step) => switch (step) {
+    1 => 'KI analysiert Beleg (Gemini 3.8)...',
+    2 => 'Server ausgelastet. Wechsle zu Gemini 3.7...',
+    3 => 'Optimiere Anfrage. Wechsle zu Gemini 3.5...',
+    4 => 'Finaler Versuch mit Gemini 3.5 Lite...',
+    _ => 'KI analysiert Beleg...',
+  };
+
+  static Future<GenerateContentResponse> _sendRequestWithModel(
+    String modelName,
+    List<DataPart> parts,
+  ) async {
     final httpClient = http.Client();
-    final model = GenerativeModel(
-      model: geminiModelName,
-      apiKey: geminiApiKey,
-      httpClient: httpClient,
-      systemInstruction: Content.system(_systemPrompt),
-      generationConfig: GenerationConfig(
-        temperature: 0.1,
-        responseMimeType: 'application/json',
-      ),
-    );
-    late final GenerateContentResponse response;
     try {
-      final prompt = [
-        Content.multi([
-          TextPart(
-            'Analysiere den angehängten Kassenbon und gib nur das JSON zurück.',
-          ),
-          DataPart(mimeType, imageBytes),
-        ]),
-      ];
-      response = await model
-          .generateContent(prompt)
-          .timeout(const Duration(seconds: 10));
-    } on TimeoutException {
-      throw TimeoutException(
-        'Gemini hat nicht innerhalb von 10 Sekunden geantwortet.',
+      final model = GenerativeModel(
+        model: modelName,
+        apiKey: geminiApiKey,
+        httpClient: httpClient,
+        systemInstruction: Content.system(_systemPrompt),
+        generationConfig: GenerationConfig(
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+        ),
       );
+      return await model
+          .generateContent([
+            Content.multi([
+              TextPart(
+                'Analysiere den angehängten Kassenbon und gib nur das JSON zurück.',
+              ),
+              ...parts,
+            ]),
+          ])
+          .timeout(const Duration(seconds: 10));
     } finally {
       httpClient.close();
     }
-    final responseText = response.text?.trim();
-    if (responseText == null || responseText.isEmpty) {
-      throw const FormatException('Gemini hat kein Ergebnis zurückgegeben.');
-    }
-
-    return parseResponse(responseText, imagePath: imagePath);
   }
 
   static bool isServiceUnavailable(Object error) {
@@ -95,6 +163,8 @@ Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere
       return 'SERVICE_UNAVAILABLE_503: ${error.toString()}';
     }
     final details = switch (error) {
+      GeminiModelCascadeException(:final lastError) =>
+        'MODEL_CASCADE_FAILED: ${diagnosticFor(lastError)}',
       InvalidApiKey() => 'INVALID_API_KEY: ${error.message}',
       UnsupportedUserLocation() => 'UNSUPPORTED_LOCATION: ${error.message}',
       ServerException() => 'GEMINI_SERVER_ERROR: ${error.message}',
@@ -105,7 +175,9 @@ Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere
       StateError() => 'CONFIGURATION_ERROR: ${error.message}',
       _ => '${error.runtimeType}: $error',
     };
-    return geminiApiKey.isEmpty ? details : details.replaceAll(geminiApiKey, '[REDACTED]');
+    return geminiApiKey.isEmpty
+        ? details
+        : details.replaceAll(geminiApiKey, '[REDACTED]');
   }
 
   static ReceiptOcrResult parseResponse(
@@ -115,19 +187,25 @@ Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere
     final jsonStart = response.indexOf('{');
     final jsonEnd = response.lastIndexOf('}');
     if (jsonStart < 0 || jsonEnd < jsonStart) {
-      throw const FormatException('Die Gemini-Antwort enthält kein JSON-Objekt.');
+      throw const FormatException(
+        'Die Gemini-Antwort enthält kein JSON-Objekt.',
+      );
     }
 
     final decoded = jsonDecode(response.substring(jsonStart, jsonEnd + 1));
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Die Gemini-Antwort hat ein ungültiges Format.');
+      throw const FormatException(
+        'Die Gemini-Antwort hat ein ungültiges Format.',
+      );
     }
 
     final productName = _stringValue(decoded['productName']);
     final storeName = _stringValue(decoded['storeName']);
     final category = _stringValue(decoded['category']);
     final price = _priceValue(decoded['price']);
-    final purchaseDate = DateTime.tryParse(_stringValue(decoded['purchaseDate']));
+    final purchaseDate = DateTime.tryParse(
+      _stringValue(decoded['purchaseDate']),
+    );
 
     return ReceiptOcrResult(
       fullText: response,
@@ -140,7 +218,8 @@ Wenn ein Wert nicht sicher erkannt wird, verwende für Text und Datum eine leere
     );
   }
 
-  static String _stringValue(Object? value) => value is String ? value.trim() : '';
+  static String _stringValue(Object? value) =>
+      value is String ? value.trim() : '';
 
   static double? _priceValue(Object? value) {
     if (value is num) return value.toDouble();

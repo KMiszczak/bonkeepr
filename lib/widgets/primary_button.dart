@@ -20,7 +20,7 @@ class PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final backgroundColor = tone == PrimaryButtonTone.destructive
-        ? const Color(0xFFEF4444)
+        ? const Color(0xFFE57373)
         : const Color(0xFF10B981);
 
     return SizedBox(
@@ -51,5 +51,3 @@ class PrimaryButton extends StatelessWidget {
     );
   }
 }
-
-

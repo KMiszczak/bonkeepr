@@ -8,6 +8,13 @@ void main() {
   group('GeminiReceiptAnalyzer', () {
     test('uses a currently supported default Flash model', () {
       expect(geminiModelName, 'gemini-3.8-flash');
+      expect(geminiFallbackModelName, 'gemini-3.7-flash');
+      expect(geminiModelCascade, [
+        'gemini-3.8-flash',
+        'gemini-3.7-flash',
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+      ]);
     });
 
     test('parses model JSON into wizard fields', () {
@@ -44,26 +51,29 @@ void main() {
       );
     });
 
-    test('formats Gemini API errors for diagnostics without exposing a key', () {
-      expect(
-        GeminiReceiptAnalyzer.diagnosticFor(
-          InvalidApiKey('API key not valid. Please pass a valid API key.'),
-        ),
-        contains('INVALID_API_KEY'),
-      );
-      expect(
-        GeminiReceiptAnalyzer.diagnosticFor(
-          ServerException('RESOURCE_EXHAUSTED: quota exceeded'),
-        ),
-        contains('RESOURCE_EXHAUSTED'),
-      );
-      expect(
-        GeminiReceiptAnalyzer.diagnosticFor(
-          TimeoutException('Gemini timed out after 10 seconds'),
-        ),
-        contains('TimeoutException'),
-      );
-    });
+    test(
+      'formats Gemini API errors for diagnostics without exposing a key',
+      () {
+        expect(
+          GeminiReceiptAnalyzer.diagnosticFor(
+            InvalidApiKey('API key not valid. Please pass a valid API key.'),
+          ),
+          contains('INVALID_API_KEY'),
+        );
+        expect(
+          GeminiReceiptAnalyzer.diagnosticFor(
+            ServerException('RESOURCE_EXHAUSTED: quota exceeded'),
+          ),
+          contains('RESOURCE_EXHAUSTED'),
+        );
+        expect(
+          GeminiReceiptAnalyzer.diagnosticFor(
+            TimeoutException('Gemini timed out after 10 seconds'),
+          ),
+          contains('TimeoutException'),
+        );
+      },
+    );
 
     test('recognizes Gemini HTTP 503 as temporary service unavailability', () {
       final error = GenerativeAIException(
@@ -76,7 +86,16 @@ void main() {
         contains('SERVICE_UNAVAILABLE_503'),
       );
     });
+
+    test('preserves diagnostics after the model cascade is exhausted', () {
+      final failure = GeminiModelCascadeException(
+        GenerativeAIException('Server Error [503]: unavailable'),
+      );
+
+      expect(
+        GeminiReceiptAnalyzer.diagnosticFor(failure),
+        contains('SERVICE_UNAVAILABLE_503'),
+      );
+    });
   });
 }
-
-

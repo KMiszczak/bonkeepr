@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
 
 import 'package:camera/camera.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show compute, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
@@ -128,17 +130,78 @@ Gesichert mit BonKeepr 🛡️''';
 }
 
 class _ReceiptCarouselDialog extends StatefulWidget {
-  const _ReceiptCarouselDialog({required this.receiptPaths});
+  const _ReceiptCarouselDialog({
+    required this.receiptPaths,
+    this.initialPage = 0,
+  });
 
   final List<String> receiptPaths;
+  final int initialPage;
 
   @override
   State<_ReceiptCarouselDialog> createState() => _ReceiptCarouselDialogState();
 }
 
 class _ReceiptCarouselDialogState extends State<_ReceiptCarouselDialog> {
-  late final PageController _pageController = PageController();
-  int _currentPage = 0;
+  late final PageController _pageController;
+  late int _currentPage;
+  final Map<String, int> _pendingRotationAngles = {};
+  final Set<String> _rotatedImagePaths = {};
+  bool _rotationInProgress = false;
+  bool _allowViewerPop = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentPage = widget.initialPage;
+    _pageController = PageController(initialPage: widget.initialPage);
+  }
+
+  Future<void> _rotateCurrentReceipt(int angle) async {
+    if (_rotationInProgress) return;
+    final mediaPath = widget.receiptPaths[_currentPage];
+    if (_isPdfPath(mediaPath)) return;
+    final currentAngle = _pendingRotationAngles[mediaPath] ?? 0;
+    final nextAngle = ((currentAngle + angle) % 360 + 360) % 360;
+    setState(() {
+      _rotationInProgress = true;
+      _pendingRotationAngles[mediaPath] = nextAngle;
+    });
+    try {
+      final file = File(mediaPath);
+      final decoded = img.decodeImage(await file.readAsBytes());
+      if (decoded == null) throw const FormatException('Ungültiges Bild.');
+      final upright = img.bakeOrientation(decoded);
+      final rotated = _resizeReceiptImage(
+        img.copyRotate(upright, angle: angle),
+      );
+      final bytes = mediaPath.toLowerCase().endsWith('.png')
+          ? img.encodePng(rotated)
+          : img.encodeJpg(rotated, quality: 82);
+      await file.writeAsBytes(bytes, flush: true);
+      await FileImage(file).evict();
+      if (mounted) {
+        setState(() {
+          _pendingRotationAngles.remove(mediaPath);
+          _rotationInProgress = false;
+          _rotatedImagePaths.add(mediaPath);
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      await FileImage(File(mediaPath)).evict();
+      if (!mounted) return;
+      setState(() {
+        _pendingRotationAngles.remove(mediaPath);
+        _rotationInProgress = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Das Belegfoto konnte nicht gedreht werden.'),
+        ),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -146,100 +209,170 @@ class _ReceiptCarouselDialogState extends State<_ReceiptCarouselDialog> {
     super.dispose();
   }
 
+  Future<void> _closeViewer() async {
+    if (_rotationInProgress) return;
+    if (!_allowViewerPop) {
+      setState(() => _allowViewerPop = true);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop(_rotatedImagePaths.toList(growable: false));
+  }
+
   @override
   Widget build(BuildContext context) => Dialog.fullscreen(
-    child: Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
+    child: PopScope<List<String>>(
+      canPop: _allowViewerPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(_closeViewer());
+      },
+      child: Scaffold(
         backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: const Text('Belege'),
-        leading: IconButton(
-          tooltip: 'Schließen',
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close),
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          title: const Text('Belege'),
+          leading: IconButton(
+            tooltip: 'Schließen',
+            onPressed: _rotationInProgress ? null : _closeViewer,
+            icon: const Icon(Icons.close),
+          ),
         ),
-      ),
-      body: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            itemCount: widget.receiptPaths.length,
-            onPageChanged: (page) => setState(() => _currentPage = page),
-            itemBuilder: (context, index) {
-              final mediaPath = widget.receiptPaths[index];
-              if (_isPdfPath(mediaPath)) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.picture_as_pdf_rounded,
-                        color: Color(0xFFF87171),
-                        size: 72,
+        body: SafeArea(
+          bottom: true,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: widget.receiptPaths.length,
+                  onPageChanged: (page) => setState(() => _currentPage = page),
+                  itemBuilder: (context, index) {
+                    final mediaPath = widget.receiptPaths[index];
+                    if (_isPdfPath(mediaPath)) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.picture_as_pdf_rounded,
+                              color: Color(0xFFF87171),
+                              size: 72,
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'PDF-Beleg',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: () => OpenFilex.open(mediaPath),
+                              icon: const Icon(Icons.open_in_new_rounded),
+                              label: const Text('Mit Standard-App öffnen'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return InteractiveViewer(
+                      panEnabled: false,
+                      minScale: 1,
+                      maxScale: 6,
+                      child: Center(
+                        child: Builder(
+                          builder: (context) {
+                            final rotationAngle =
+                                _pendingRotationAngles[mediaPath] ?? 0;
+                            return Transform.rotate(
+                              angle: rotationAngle * math.pi / 180,
+                              child: Image.file(
+                                File(mediaPath),
+                                key: ValueKey('${mediaPath}_$rotationAngle'),
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const Text(
+                                  'Belegfoto nicht verfügbar',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'PDF-Beleg',
-                        style: TextStyle(
+                    );
+                  },
+                ),
+              ),
+              Positioned(
+                left: 32,
+                right: 32,
+                bottom: 28,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _rotationButton(
+                      tooltip: 'Nach links drehen',
+                      icon: Icons.rotate_left,
+                      onPressed:
+                          _rotationInProgress ||
+                              _isPdfPath(widget.receiptPaths[_currentPage])
+                          ? null
+                          : () => _rotateCurrentReceipt(-90),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Text(
+                        '${_currentPage + 1}/${widget.receiptPaths.length}',
+                        style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      FilledButton.icon(
-                        onPressed: () => OpenFilex.open(mediaPath),
-                        icon: const Icon(Icons.open_in_new_rounded),
-                        label: const Text('Mit Standard-App öffnen'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return InteractiveViewer(
-                panEnabled: false,
-                minScale: 1,
-                maxScale: 6,
-                child: Center(
-                  child: Image.file(
-                    File(mediaPath),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Text(
-                      'Belegfoto nicht verfügbar',
-                      style: TextStyle(color: Colors.white),
                     ),
-                  ),
-                ),
-              );
-            },
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 20,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Text(
-                  '${_currentPage + 1}/${widget.receiptPaths.length}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
+                    _rotationButton(
+                      tooltip: 'Nach rechts drehen',
+                      icon: Icons.rotate_right,
+                      onPressed:
+                          _rotationInProgress ||
+                              _isPdfPath(widget.receiptPaths[_currentPage])
+                          ? null
+                          : () => _rotateCurrentReceipt(90),
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
+    ),
+  );
+
+  Widget _rotationButton({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback? onPressed,
+  }) => Container(
+    decoration: const BoxDecoration(
+      color: Colors.black45,
+      shape: BoxShape.circle,
+    ),
+    child: IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      color: Colors.white,
+      icon: Icon(icon),
     ),
   );
 }
@@ -428,11 +561,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
     if (!mounted) return;
-    await showDialog<void>(
+    final rotatedPaths = await showDialog<List<String>>(
       context: context,
       barrierColor: Colors.black,
       builder: (_) => _ReceiptCarouselDialog(receiptPaths: receiptPaths),
     );
+    if (!mounted) return;
+    await _evictReceiptImageCache(rotatedPaths ?? receiptPaths);
+    if (mounted) await _refresh();
   }
 
   Future<void> _editWarrantyFromCard(Warranty warranty) async {
@@ -739,10 +875,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(height: 24),
                         Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Deine Garantien',
-                                style: TextStyle(
+                                'Deine Garantien (${filteredWarranties.length})',
+                                style: const TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -1094,6 +1230,7 @@ class WarrantyDetailPage extends StatefulWidget {
 class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
   bool _busy = false;
   int _receiptIndex = 0;
+  int _receiptImageRevision = 0;
 
   Future<void> _editWarranty() async {
     final warranty = widget.warranty;
@@ -1290,55 +1427,17 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
       await OpenFilex.open(imagePath);
       return;
     }
-    await showDialog<void>(
+    final rotatedPaths = await showDialog<List<String>>(
       context: context,
       barrierColor: Colors.black,
-      builder: (dialogContext) => Dialog.fullscreen(
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            title: const Text('Kassenbon'),
-            leading: IconButton(
-              tooltip: 'Schließen',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              icon: const Icon(Icons.close),
-            ),
-          ),
-          body: PageView.builder(
-            controller: PageController(initialPage: initialIndex),
-            itemCount: receiptPaths.length,
-            itemBuilder: (context, index) {
-              final mediaPath = receiptPaths[index];
-              if (_isPdfPath(mediaPath)) {
-                return Center(
-                  child: TextButton.icon(
-                    onPressed: () => OpenFilex.open(mediaPath),
-                    icon: const Icon(Icons.picture_as_pdf_rounded),
-                    label: const Text('PDF mit Standard-App öffnen'),
-                  ),
-                );
-              }
-              return InteractiveViewer(
-                minScale: 1,
-                maxScale: 6,
-                child: Center(
-                  child: Image.file(
-                    File(mediaPath),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Text(
-                      'Belegfoto nicht verfügbar',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
+      builder: (_) => _ReceiptCarouselDialog(
+        receiptPaths: receiptPaths,
+        initialPage: initialIndex,
       ),
     );
+    if (!mounted) return;
+    await _evictReceiptImageCache(rotatedPaths ?? receiptPaths);
+    if (mounted) setState(() => _receiptImageRevision++);
   }
 
   @override
@@ -1408,6 +1507,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                           )
                         : Image.file(
                             File(receiptPath),
+                            key: ValueKey(
+                              '${receiptPath}_$_receiptImageRevision',
+                            ),
                             height: 240,
                             width: double.infinity,
                             fit: BoxFit.cover,
@@ -1498,6 +1600,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                             )
                           : Image.file(
                               File(receiptPaths[index]),
+                              key: ValueKey(
+                                '${receiptPaths[index]}_$_receiptImageRevision',
+                              ),
                               fit: BoxFit.cover,
                             ),
                     ),
@@ -1697,6 +1802,43 @@ class _WarrantyStatusBadgeState extends State<_WarrantyStatusBadge>
 
 bool _isPdfPath(String filePath) =>
     path.extension(filePath).toLowerCase() == '.pdf';
+
+img.Image _resizeReceiptImage(img.Image image) {
+  const maxEdge = 1920;
+  if (image.width <= maxEdge && image.height <= maxEdge) return image;
+  return image.width >= image.height
+      ? img.copyResize(image, width: maxEdge)
+      : img.copyResize(image, height: maxEdge);
+}
+
+Uint8List _compressReceiptImage(Uint8List sourceBytes) {
+  final sourceImage = img.decodeImage(sourceBytes);
+  if (sourceImage == null) {
+    throw const FormatException('Das Belegfoto konnte nicht gelesen werden.');
+  }
+  final uprightImage = img.bakeOrientation(sourceImage);
+  return img.encodeJpg(_resizeReceiptImage(uprightImage), quality: 82);
+}
+
+Future<String> _persistCompressedReceiptImage(String sourcePath) async {
+  final sourceBytes = await File(sourcePath).readAsBytes();
+  final jpegBytes = await compute(_compressReceiptImage, sourceBytes);
+  final documents = await getApplicationDocumentsDirectory();
+  final receiptsDirectory = Directory(path.join(documents.path, 'receipts'));
+  await receiptsDirectory.create(recursive: true);
+  final destination = path.join(
+    receiptsDirectory.path,
+    'receipt_${DateTime.now().microsecondsSinceEpoch}.jpg',
+  );
+  return (await File(destination).writeAsBytes(jpegBytes, flush: true)).path;
+}
+
+Future<void> _evictReceiptImageCache(Iterable<String> filePaths) async {
+  for (final filePath in filePaths) {
+    if (filePath.isEmpty || _isPdfPath(filePath)) continue;
+    await FileImage(File(filePath)).evict();
+  }
+}
 
 String _categoryLabel(Category category) => switch (category) {
   Category.elektronik => 'Elektronik',
@@ -2225,6 +2367,8 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   final _purchaseDateController = TextEditingController();
   late ReceiptOcrResult _scanResult;
   final List<String> _receiptPaths = [];
+  String? _activeReceiptPreviewPath;
+  int _receiptPreviewRevision = 0;
   int _warrantyMonths = 24;
   int? _warrantyDays;
   int _reminderDaysBefore = 30;
@@ -2236,6 +2380,9 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   bool _allowPop = false;
   int _analysisGeneration = 0;
   String? _analysisError;
+  String _analysisStatusText = 'Lade Beleg hoch & analysiere...';
+  int _analysisStep = 1;
+  bool _analysisSucceeded = false;
 
   @override
   void initState() {
@@ -2247,6 +2394,9 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       existing?.allReceiptPaths ??
           (result.imagePath.isEmpty ? const [] : [result.imagePath]),
     );
+    _activeReceiptPreviewPath = _receiptPaths.isEmpty
+        ? result.imagePath
+        : _receiptPaths.first;
     _titleController = TextEditingController(text: existing?.title ?? '');
     _storeController.text = existing?.storeName ?? result.storeName;
     _serialNumberController.text = existing?.serialNumber ?? '';
@@ -2280,11 +2430,28 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
           'apiKeyConfigured=${GeminiReceiptAnalyzer.hasApiKey}',
         );
       }
-      final result = await GeminiReceiptAnalyzer.analyzeReceipt(
+      final result = await GeminiReceiptAnalyzer.analyzeReceiptWithFallback(
         imagePath: imagePath,
+        onStepUpdate: (step) {
+          if (!mounted || generation != _analysisGeneration) return;
+          setState(() => _analysisStep = step);
+        },
+        onStatusUpdate: (status) {
+          if (!mounted || generation != _analysisGeneration) return;
+          setState(() {
+            _analysisStatusText = status;
+            _analysisSucceeded = status == 'Beleg erfolgreich analysiert! ✓';
+          });
+        },
       );
+      if (result.productTitle.trim().isEmpty &&
+          result.storeName.trim().isEmpty &&
+          result.productPrice == null &&
+          result.purchaseDate == null) {
+        throw const FormatException('Gemini hat keine Bon-Daten erkannt.');
+      }
       if (!mounted || generation != _analysisGeneration) return;
-      await _waitForMinimumAnalysisDuration(overlayDuration);
+      await Future<void>.delayed(const Duration(milliseconds: 1800));
       if (!mounted || generation != _analysisGeneration) return;
       setState(() {
         _scanResult = result.copyWith(imagePath: _scanResult.imagePath);
@@ -2311,11 +2478,16 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       if (!mounted || generation != _analysisGeneration) return;
       await _waitForMinimumAnalysisDuration(overlayDuration);
       if (!mounted || generation != _analysisGeneration) return;
+      final failureMessage = error is GeminiModelCascadeException
+          ? 'KI-Analyse nicht verfügbar. Bitte Daten manuell eintragen.'
+          : 'Text konnte nicht automatisch erkannt werden, bitte Daten manuell prüfen.';
       setState(() {
         _isAnalyzing = false;
-        _analysisError =
-            'Die automatische Erfassung ist derzeit nicht verfügbar. Bitte fülle die Felder manuell aus.';
+        _analysisError = failureMessage;
       });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(failureMessage)));
     } finally {
       if (generation == _analysisGeneration) {
         _analysisRequestInProgress = false;
@@ -2347,6 +2519,11 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     _analysisGeneration++;
     setState(() {
       _scanResult = result;
+      _activeReceiptPreviewPath = result.imagePath;
+      _receiptPreviewRevision++;
+      _analysisStatusText = 'Lade Beleg hoch & analysiere...';
+      _analysisStep = 1;
+      _analysisSucceeded = false;
       _isAnalyzing = true;
       _analysisError = null;
     });
@@ -2472,48 +2649,21 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
     final initialPage = selectedPath == null
         ? 0
         : paths.indexOf(selectedPath).clamp(0, paths.length - 1);
-    await showDialog<void>(
+    final rotatedPaths = await showDialog<List<String>>(
       context: context,
       barrierColor: Colors.black,
-      builder: (dialogContext) => Dialog.fullscreen(
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            title: const Text('Kassenbon'),
-            leading: IconButton(
-              tooltip: 'Schließen',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              icon: const Icon(Icons.close),
-            ),
-          ),
-          body: PageView.builder(
-            controller: PageController(initialPage: initialPage),
-            itemCount: paths.length,
-            itemBuilder: (context, index) {
-              final mediaPath = paths[index];
-              if (_isPdfPath(mediaPath)) {
-                return Center(
-                  child: TextButton.icon(
-                    onPressed: () => OpenFilex.open(mediaPath),
-                    icon: const Icon(Icons.picture_as_pdf_rounded),
-                    label: const Text('PDF mit Standard-App öffnen'),
-                  ),
-                );
-              }
-              return InteractiveViewer(
-                minScale: 1,
-                maxScale: 5,
-                child: Center(
-                  child: Image.file(File(mediaPath), fit: BoxFit.contain),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
+      builder: (_) =>
+          _ReceiptCarouselDialog(receiptPaths: paths, initialPage: initialPage),
     );
+    if (!mounted) return;
+    await _evictReceiptImageCache(rotatedPaths ?? paths);
+    if (!mounted) return;
+    setState(() {
+      if (rotatedPaths?.isNotEmpty ?? false) {
+        _activeReceiptPreviewPath = rotatedPaths!.last;
+      }
+      _receiptPreviewRevision++;
+    });
   }
 
   Future<void> _chooseReceiptImage() async {
@@ -2615,6 +2765,9 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
             return;
           }
           _receiptPaths.add(savedPath);
+          if (_activeReceiptPreviewPath?.isEmpty ?? true) {
+            _activeReceiptPreviewPath = _receiptPaths.first;
+          }
           _scanResult = _scanResult.copyWith(imagePath: _receiptPaths.first);
           _isAnalyzing = false;
           _analysisError = null;
@@ -2638,6 +2791,9 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
           return;
         }
         _receiptPaths.add(savedPath);
+        if (_activeReceiptPreviewPath?.isEmpty ?? true) {
+          _activeReceiptPreviewPath = _receiptPaths.first;
+        }
         _scanResult = _scanResult.copyWith(imagePath: _receiptPaths.first);
       });
     } catch (_) {
@@ -2651,17 +2807,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   }
 
   Future<String> _persistSelectedReceiptImage(String sourcePath) async {
-    final documents = await getApplicationDocumentsDirectory();
-    final receiptsDirectory = Directory(path.join(documents.path, 'receipts'));
-    await receiptsDirectory.create(recursive: true);
-    final extension = path.extension(sourcePath).isEmpty
-        ? '.jpg'
-        : path.extension(sourcePath);
-    final destination = path.join(
-      receiptsDirectory.path,
-      'receipt_${DateTime.now().microsecondsSinceEpoch}$extension',
-    );
-    return (await File(sourcePath).copy(destination)).path;
+    return _persistCompressedReceiptImage(sourcePath);
   }
 
   Future<String> _persistSelectedReceiptFile(PlatformFile selectedFile) async {
@@ -2708,6 +2854,7 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       _WarrantyDurationChoice(label: '60 Monate', months: 60),
     ];
     final isEditing = widget.warranty != null;
+    final previewPath = _activeReceiptPreviewPath ?? _scanResult.imagePath;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -2816,14 +2963,14 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                             ],
                           ),
                           const SizedBox(height: 18),
-                          if (_scanResult.imagePath.isNotEmpty)
+                          if (previewPath.isNotEmpty)
                             Stack(
                               children: [
                                 GestureDetector(
-                                  onTap: _showReceiptPreview,
+                                  onTap: () => _showReceiptPreview(previewPath),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(16),
-                                    child: _isPdfPath(_scanResult.imagePath)
+                                    child: _isPdfPath(previewPath)
                                         ? Container(
                                             height: 180,
                                             width: double.infinity,
@@ -2848,7 +2995,10 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                                             ),
                                           )
                                         : Image.file(
-                                            File(_scanResult.imagePath),
+                                            File(previewPath),
+                                            key: ValueKey(
+                                              '${previewPath}_$_receiptPreviewRevision',
+                                            ),
                                             height: 180,
                                             width: double.infinity,
                                             fit: BoxFit.cover,
@@ -2954,6 +3104,9 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                                                 )
                                               : Image.file(
                                                   File(receiptPath),
+                                                  key: ValueKey(
+                                                    '${receiptPath}_$_receiptPreviewRevision',
+                                                  ),
                                                   fit: BoxFit.cover,
                                                 ),
                                         ),
@@ -2964,6 +3117,14 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                                         child: InkWell(
                                           onTap: () => setState(() {
                                             _receiptPaths.removeAt(index);
+                                            if (_activeReceiptPreviewPath ==
+                                                receiptPath) {
+                                              _activeReceiptPreviewPath =
+                                                  _receiptPaths.isEmpty
+                                                  ? ''
+                                                  : _receiptPaths.first;
+                                            }
+                                            _receiptPreviewRevision++;
                                             _scanResult = _scanResult.copyWith(
                                               imagePath: _receiptPaths.isEmpty
                                                   ? ''
@@ -2983,11 +3144,11 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                               ),
                             ),
                           ],
-                          if (_scanResult.imagePath.isNotEmpty) ...[
+                          if (previewPath.isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Center(
                               child: Text(
-                                _isPdfPath(_scanResult.imagePath)
+                                _isPdfPath(previewPath)
                                     ? 'Tippen zum Öffnen'
                                     : 'Tippen zum Vergrößern',
                                 style: TextStyle(
@@ -3251,8 +3412,11 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                 ),
               ),
               child: _isAnalyzing
-                  ? const _ReceiptAnalysisOverlay(
+                  ? _ReceiptAnalysisOverlay(
                       key: ValueKey('receipt-analysis-overlay'),
+                      statusText: _analysisStatusText,
+                      step: _analysisStep,
+                      isSuccess: _analysisSucceeded,
                     )
                   : const SizedBox.expand(
                       key: ValueKey('receipt-analysis-idle'),
@@ -3307,280 +3471,112 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
   };
 }
 
-class _ReceiptAnalysisOverlay extends StatefulWidget {
-  const _ReceiptAnalysisOverlay({super.key});
+class _ReceiptAnalysisOverlay extends StatelessWidget {
+  const _ReceiptAnalysisOverlay({
+    required this.statusText,
+    required this.step,
+    required this.isSuccess,
+    super.key,
+  });
+
+  final String statusText;
+  final int step;
+  final bool isSuccess;
 
   @override
-  State<_ReceiptAnalysisOverlay> createState() =>
-      _ReceiptAnalysisOverlayState();
-}
-
-class _ReceiptAnalysisOverlayState extends State<_ReceiptAnalysisOverlay>
-    with TickerProviderStateMixin {
-  late final AnimationController _animationController = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 5),
-  )..repeat();
-  late final AnimationController _pulseController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat(reverse: true);
-  late final Animation<double> _pulse = Tween<double>(
-    begin: 0.96,
-    end: 1.04,
-  ).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
-  late final Timer _badgeTimer;
-  int _visibleBadgeCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _badgeTimer = Timer.periodic(const Duration(milliseconds: 800), (timer) {
-      if (!mounted) return;
-      setState(() => _visibleBadgeCount = (_visibleBadgeCount + 1).clamp(0, 3));
-      if (_visibleBadgeCount >= 3) timer.cancel();
-    });
-  }
-
-  @override
-  void dispose() {
-    _badgeTimer.cancel();
-    _animationController.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  Widget _successBadge(String label, bool visible) {
-    return AnimatedOpacity(
-      opacity: visible ? 1 : 0,
-      duration: const Duration(milliseconds: 220),
-      child: AnimatedScale(
-        scale: visible ? 1 : 0.58,
-        duration: const Duration(milliseconds: 360),
-        curve: Curves.easeOutBack,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: const Color(0xCC1E293B),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: GarantieHeldApp.emerald.withValues(alpha: 0.42),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: GarantieHeldApp.emerald.withValues(alpha: 0.12),
-                    blurRadius: 14,
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    color: GarantieHeldApp.emerald,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: const ColoredBox(color: Colors.black54),
+        ),
+        SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xED111827),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.28),
+                      blurRadius: 28,
+                      offset: const Offset(0, 12),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: isSuccess
+                          ? const Icon(
+                              Icons.check_circle_rounded,
+                              key: ValueKey('receipt-analysis-success'),
+                              color: GarantieHeldApp.emerald,
+                              size: 48,
+                            )
+                          : const SizedBox(
+                              key: ValueKey('receipt-analysis-progress'),
+                              width: 48,
+                              height: 48,
+                              child: CircularProgressIndicator(
+                                color: GarantieHeldApp.emerald,
+                                strokeWidth: 4,
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'KI-Erfassung läuft...',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      transitionBuilder: (child, animation) =>
+                          FadeTransition(opacity: animation, child: child),
+                      child: Text(
+                        statusText,
+                        key: ValueKey(statusText),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      '(Versuch $step von 4)',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white38,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: ColoredBox(color: Colors.black.withValues(alpha: 0.6)),
-          ),
-          SafeArea(
-            child: Center(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final orbSize = math.min(constraints.maxWidth * 0.42, 170.0);
-                  final stageWidth = math.min(constraints.maxWidth - 32, 360.0);
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: stageWidth,
-                        height: 300,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            AnimatedBuilder(
-                              animation: _animationController,
-                              builder: (context, _) => CustomPaint(
-                                size: Size(stageWidth, 300),
-                                painter: _NeuralSparklePainter(
-                                  progress: _animationController.value,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 0,
-                              top: 48,
-                              child: _successBadge(
-                                'Händler',
-                                _visibleBadgeCount >= 1,
-                              ),
-                            ),
-                            Positioned(
-                              right: 0,
-                              top: 76,
-                              child: _successBadge(
-                                'Kaufpreis',
-                                _visibleBadgeCount >= 2,
-                              ),
-                            ),
-                            Positioned(
-                              left: 28,
-                              bottom: 34,
-                              child: _successBadge(
-                                'Datum',
-                                _visibleBadgeCount >= 3,
-                              ),
-                            ),
-                            AnimatedBuilder(
-                              animation: _pulse,
-                              builder: (context, child) => Transform.scale(
-                                scale: _pulse.value,
-                                child: RotationTransition(
-                                  turns: _animationController,
-                                  child: child,
-                                ),
-                              ),
-                              child: Container(
-                                width: orbSize,
-                                height: orbSize,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: const RadialGradient(
-                                    center: Alignment(-0.28, -0.34),
-                                    colors: [
-                                      Color(0xFF6EE7B7),
-                                      Color(0xFF10B981),
-                                      Color(0xFF0F766E),
-                                      Color(0xFF0F172A),
-                                    ],
-                                    stops: [0, 0.35, 0.72, 1],
-                                  ),
-                                  border: Border.all(
-                                    color: const Color(
-                                      0xFF6EE7B7,
-                                    ).withValues(alpha: 0.78),
-                                    width: 1.5,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: GarantieHeldApp.emerald.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                      blurRadius: 46,
-                                      spreadRadius: 7,
-                                    ),
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF2DD4BF,
-                                      ).withValues(alpha: 0.28),
-                                      blurRadius: 72,
-                                      spreadRadius: 14,
-                                    ),
-                                  ],
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.auto_awesome_rounded,
-                                    size: orbSize * 0.44,
-                                    color: Colors.white,
-                                    shadows: const [
-                                      Shadow(
-                                        color: Color(0xCC10B981),
-                                        blurRadius: 24,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 24),
-                        child: Text(
-                          'KI liest Produkt & Händler aus...',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NeuralSparklePainter extends CustomPainter {
-  const _NeuralSparklePainter({required this.progress});
-
-  final double progress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final paint = Paint()..style = PaintingStyle.fill;
-    for (var index = 0; index < 18; index++) {
-      final phase = (index / 18) * math.pi * 2;
-      final angle = phase + progress * math.pi * 2;
-      final radiusX = size.width * (0.23 + (index % 3) * 0.035);
-      final radiusY = size.height * (0.22 + (index % 4) * 0.025);
-      final point = Offset(
-        center.dx + math.cos(angle) * radiusX,
-        center.dy + math.sin(angle) * radiusY,
-      );
-      final opacity = 0.22 + ((index % 5) * 0.12);
-      paint.color = GarantieHeldApp.emerald.withValues(alpha: opacity);
-      canvas.drawCircle(point, 1.4 + (index % 3) * 0.65, paint);
-      paint.color = const Color(0xFF5EEAD4).withValues(alpha: opacity * 0.3);
-      canvas.drawCircle(point, 4.0 + (index % 2), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _NeuralSparklePainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      ],
+    ),
+  );
 }
 
 class _GeminiAnalysisErrorCard extends StatelessWidget {
@@ -3714,7 +3710,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   String? _error;
   bool _busy = false;
-  bool _flashEnabled = false;
+  FlashMode _flashMode = FlashMode.off;
   bool _canOpenSettings = false;
   bool _allowPop = false;
   bool _leavingHome = false;
@@ -3758,6 +3754,11 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
         enableAudio: false,
       );
       await controller.initialize();
+      try {
+        await controller.setFlashMode(FlashMode.off);
+      } on CameraException {
+        // Some camera devices do not expose flash control.
+      }
       if (!mounted) {
         await controller.dispose();
         return;
@@ -3782,18 +3783,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     setState(() => _busy = true);
     try {
       final image = await controller.takePicture();
-      var imagePath = image.path;
-      try {
-        imagePath = await _persistReceiptImage(image.path);
-      } catch (_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Das Foto bleibt vorerst nur temporär verfügbar.'),
-            ),
-          );
-        }
-      }
+      final imagePath = await _persistReceiptImage(image.path);
 
       if (identical(_controller, controller)) _controller = null;
       await controller.dispose();
@@ -3813,7 +3803,9 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Der Bon konnte nicht erkannt werden.')),
+          const SnackBar(
+            content: Text('Das Bonfoto konnte nicht verarbeitet werden.'),
+          ),
         );
       }
     } finally {
@@ -3824,12 +3816,14 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   Future<void> _toggleFlash() async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized || _busy) return;
-    final enableFlash = !_flashEnabled;
+    final nextMode = switch (_flashMode) {
+      FlashMode.off => FlashMode.always,
+      FlashMode.always || FlashMode.torch => FlashMode.auto,
+      FlashMode.auto => FlashMode.off,
+    };
     try {
-      await controller.setFlashMode(
-        enableFlash ? FlashMode.always : FlashMode.off,
-      );
-      if (mounted) setState(() => _flashEnabled = enableFlash);
+      await controller.setFlashMode(nextMode);
+      if (mounted) setState(() => _flashMode = nextMode);
     } on CameraException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3850,18 +3844,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       final image = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (image == null) return;
 
-      var imagePath = image.path;
-      try {
-        imagePath = await _persistReceiptImage(image.path);
-      } catch (_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Das Bild bleibt vorerst nur temporär verfügbar.'),
-            ),
-          );
-        }
-      }
+      final imagePath = await _persistReceiptImage(image.path);
 
       final controller = _controller;
       _controller = null;
@@ -3912,17 +3895,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   }
 
   Future<String> _persistReceiptImage(String sourcePath) async {
-    final documents = await getApplicationDocumentsDirectory();
-    final receiptsDirectory = Directory(path.join(documents.path, 'receipts'));
-    await receiptsDirectory.create(recursive: true);
-    final extension = path.extension(sourcePath).isEmpty
-        ? '.jpg'
-        : path.extension(sourcePath);
-    final destination = path.join(
-      receiptsDirectory.path,
-      'receipt_${DateTime.now().microsecondsSinceEpoch}$extension',
-    );
-    return (await File(sourcePath).copy(destination)).path;
+    return _persistCompressedReceiptImage(sourcePath);
   }
 
   @override
@@ -3953,14 +3926,21 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
           ),
           actions: [
             IconButton(
-              tooltip: _flashEnabled
-                  ? 'Blitz ausschalten'
-                  : 'Blitz einschalten',
+              tooltip: switch (_flashMode) {
+                FlashMode.off => 'Blitz aus · antippen für An',
+                FlashMode.always ||
+                FlashMode.torch => 'Blitz an · antippen für Auto',
+                FlashMode.auto => 'Blitz automatisch · antippen für Aus',
+              },
               onPressed:
                   controller == null || !controller.value.isInitialized || _busy
                   ? null
                   : _toggleFlash,
-              icon: Icon(_flashEnabled ? Icons.flash_on : Icons.flash_off),
+              icon: Icon(switch (_flashMode) {
+                FlashMode.off => Icons.flash_off,
+                FlashMode.always || FlashMode.torch => Icons.flash_on,
+                FlashMode.auto => Icons.flash_auto,
+              }),
             ),
             IconButton(
               tooltip: 'Foto aus Galerie laden',
@@ -4078,17 +4058,43 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      FloatingActionButton.large(
-                        heroTag: 'captureReceipt',
-                        onPressed: _busy ? null : _captureAndRecognize,
-                        backgroundColor: GarantieHeldApp.emerald,
-                        foregroundColor: const Color(0xFF052E23),
-                        child: _busy
-                            ? const CircularProgressIndicator()
-                            : const Icon(
-                                Icons.document_scanner_rounded,
-                                size: 32,
+                      Semantics(
+                        button: true,
+                        label: 'Kassenbon fotografieren',
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _busy ? null : _captureAndRecognize,
+                          child: Container(
+                            width: 82,
+                            height: 82,
+                            padding: const EdgeInsets.all(5),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: DecoratedBox(
+                              decoration: const BoxDecoration(
+                                color: GarantieHeldApp.emerald,
+                                shape: BoxShape.circle,
                               ),
+                              child: Center(
+                                child: _busy
+                                    ? const SizedBox.square(
+                                        dimension: 30,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 3,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.camera_alt_rounded,
+                                        size: 34,
+                                        color: Colors.white,
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(

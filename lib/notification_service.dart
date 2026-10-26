@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as timezone_data;
 import 'package:timezone/timezone.dart' as timezone;
@@ -12,8 +13,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   static Future<void>? _initialization;
 
-  static Future<void> _initialize() =>
-      _initialization ??= _initializePlugin();
+  static Future<void> _initialize() => _initialization ??= _initializePlugin();
 
   static Future<void> _initializePlugin() async {
     timezone_data.initializeTimeZones();
@@ -33,8 +33,9 @@ class NotificationService {
       await _plugin.cancel(id);
       if (warranty.reminderDaysBefore < 0) return true;
 
-      final reminderDate = warranty.expirationDate
-          .subtract(Duration(days: warranty.reminderDaysBefore));
+      final reminderDate = warranty.expirationDate.subtract(
+        Duration(days: warranty.reminderDaysBefore),
+      );
       final scheduledAt = DateTime(
         reminderDate.year,
         reminderDate.month,
@@ -79,14 +80,72 @@ class NotificationService {
     }
   }
 
+  static Future<bool?> notificationsEnabled() async {
+    await _initialize();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.areNotificationsEnabled();
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final settings = await _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.checkPermissions();
+      return settings?.isEnabled;
+    }
+    return null;
+  }
+
+  static Future<bool> requestPermission() async {
+    await _initialize();
+    return _requestPermission();
+  }
+
+  static Future<bool> sendTestNotification() async {
+    try {
+      await _initialize();
+      if (!await _requestPermission()) return false;
+      const testNotificationId = 0x7ffffffe;
+      await _plugin.cancel(testNotificationId);
+      await _plugin.zonedSchedule(
+        testNotificationId,
+        'Garantie läuft bald ab!',
+        'Dies ist eine Test-Benachrichtigung von BonKeepr.',
+        timezone.TZDateTime.now(timezone.local).add(const Duration(seconds: 5)),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'warranty_reminders',
+            'Garantie-Erinnerungen',
+            channelDescription: 'Erinnerungen vor dem Ablauf einer Garantie.',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> _requestPermission() async {
     final android = await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.requestNotificationsPermission();
     final ios = await _plugin
         .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
+          IOSFlutterLocalNotificationsPlugin
+        >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
     return android ?? ios ?? true;
   }
@@ -103,6 +162,3 @@ class NotificationService {
   static String _formatDate(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
 }
-
-
-

@@ -6,6 +6,7 @@ import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -15,6 +16,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 
 import 'database_helper.dart';
+import 'google_drive_backup_service.dart';
+import 'notification_service.dart';
 import 'warranty_model.dart';
 import 'theme_controller.dart';
 
@@ -34,7 +37,33 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _busy = false;
+  bool _driveStatusLoading = true;
+  bool? _notificationsEnabled;
+  GoogleSignInAccount? _driveAccount;
   ThemeMode _themeMode = ThemeController.instance.themeMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIntegrationStatus();
+  }
+
+  Future<void> _loadIntegrationStatus() async {
+    GoogleSignInAccount? account;
+    bool? notificationsEnabled;
+    try {
+      account = await GoogleDriveBackupService.instance.restoreSession();
+    } catch (_) {}
+    try {
+      notificationsEnabled = await NotificationService.notificationsEnabled();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _driveAccount = account;
+      _notificationsEnabled = notificationsEnabled;
+      _driveStatusLoading = false;
+    });
+  }
 
   String _buildWarrantyCsv(
     List<Warranty> warranties, {
@@ -82,66 +111,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final warranties = await DatabaseHelper.instance.getAllWarranties();
-      final archive = Archive();
-      final relativeImagePaths = <String, String>{
-        for (final warranty in warranties) warranty.id: '',
-      };
-      final relativeReceiptPaths = <String, String>{};
-      archive.addFile(ArchiveFile.directory('belege/'));
-      var mediaIndex = 0;
-      for (final warranty in warranties) {
-        final relatives = <String>[];
-        for (final sourcePath in warranty.allReceiptPaths.take(3)) {
-          final sourceFile = File(sourcePath);
-          if (sourcePath.isEmpty || !await sourceFile.exists()) continue;
-          final extension = path.extension(sourcePath).toLowerCase();
-          if (!const {'.jpg', '.jpeg', '.png', '.pdf'}.contains(extension))
-            continue;
-          final relativePath = 'belege/receipt_${++mediaIndex}$extension';
-          archive.addFile(
-            ArchiveFile.bytes(relativePath, await sourceFile.readAsBytes()),
-          );
-          relatives.add(relativePath);
-        }
-        relativeImagePaths[warranty.id] = relatives.isEmpty
-            ? ''
-            : relatives.first;
-        relativeReceiptPaths[warranty.id] = relatives.join('|');
-      }
-      archive.addFile(
-        ArchiveFile.string(
-          'garantien.csv',
-          _buildWarrantyCsv(
-            warranties,
-            imagePaths: relativeImagePaths,
-            receiptPaths: relativeReceiptPaths,
-          ),
-        ),
-      );
-
-      final documents = await getApplicationDocumentsDirectory();
-      final backupDirectory = Directory(
-        path.join(documents.path, 'BonKeepr', 'Backups'),
-      );
-      await backupDirectory.create(recursive: true);
-      final now = DateTime.now();
-      final date =
-          '${now.year.toString().padLeft(4, '0')}'
-          '-${now.month.toString().padLeft(2, '0')}'
-          '-${now.day.toString().padLeft(2, '0')}'
-          '_${now.hour.toString().padLeft(2, '0')}'
-          '${now.minute.toString().padLeft(2, '0')}'
-          '${now.second.toString().padLeft(2, '0')}';
-      final backupFile = File(
-        path.join(backupDirectory.path, 'bonkeepr_backup_$date.zip'),
-      );
-      await backupFile.writeAsBytes(ZipEncoder().encode(archive), flush: true);
+      final backup = await _createFullBackupFile();
       if (!mounted) return;
       await SharePlus.instance.share(
         ShareParams(
-          text: 'BonKeepr-Backup (${warranties.length} Garantien)',
-          files: [XFile(backupFile.path)],
+          text: 'BonKeepr-Backup (${backup.warrantyCount} Garantien)',
+          files: [XFile(backup.file.path)],
         ),
       );
     } catch (_) {
@@ -149,6 +124,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<({File file, int warrantyCount})> _createFullBackupFile() async {
+    final warranties = await DatabaseHelper.instance.getAllWarranties();
+    final archive = Archive();
+    final relativeImagePaths = <String, String>{
+      for (final warranty in warranties) warranty.id: '',
+    };
+    final relativeReceiptPaths = <String, String>{};
+    archive.addFile(ArchiveFile.directory('belege/'));
+    var mediaIndex = 0;
+    for (final warranty in warranties) {
+      final relatives = <String>[];
+      for (final sourcePath in warranty.allReceiptPaths.take(3)) {
+        final sourceFile = File(sourcePath);
+        if (sourcePath.isEmpty || !await sourceFile.exists()) continue;
+        final extension = path.extension(sourcePath).toLowerCase();
+        if (!const {'.jpg', '.jpeg', '.png', '.pdf'}.contains(extension)) {
+          continue;
+        }
+        final relativePath = 'belege/receipt_${++mediaIndex}$extension';
+        archive.addFile(
+          ArchiveFile.bytes(relativePath, await sourceFile.readAsBytes()),
+        );
+        relatives.add(relativePath);
+      }
+      relativeImagePaths[warranty.id] = relatives.isEmpty
+          ? ''
+          : relatives.first;
+      relativeReceiptPaths[warranty.id] = relatives.join('|');
+    }
+    archive.addFile(
+      ArchiveFile.string(
+        'garantien.csv',
+        _buildWarrantyCsv(
+          warranties,
+          imagePaths: relativeImagePaths,
+          receiptPaths: relativeReceiptPaths,
+        ),
+      ),
+    );
+
+    final documents = await getApplicationDocumentsDirectory();
+    final backupDirectory = Directory(
+      path.join(documents.path, 'BonKeepr', 'Backups'),
+    );
+    await backupDirectory.create(recursive: true);
+    final backupFile = File(
+      path.join(backupDirectory.path, 'bonkeepr_backup.zip'),
+    );
+    await backupFile.writeAsBytes(ZipEncoder().encode(archive), flush: true);
+    return (file: backupFile, warrantyCount: warranties.length);
   }
 
   List<Warranty> _parseWarrantyCsv(
@@ -263,74 +290,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showMessage('Die ausgewählte ZIP-Datei konnte nicht gelesen werden.');
         return;
       }
-      final archive = ZipDecoder().decodeBytes(zipBytes, verify: true);
-      ArchiveFile? csvFile;
-      for (final entry in archive) {
-        final entryName = entry.name.replaceAll('\\', '/');
-        if (entryName == 'garantien.csv' && entry.isFile) {
-          csvFile = entry;
-          break;
-        }
-      }
-      if (csvFile == null) {
-        _showMessage('Im ZIP-Archiv fehlt garantien.csv.');
-        return;
-      }
-
-      final documents = await getApplicationDocumentsDirectory();
-      final receiptsDirectory = Directory(
-        path.join(documents.path, 'receipts'),
-      );
-      await receiptsDirectory.create(recursive: true);
-      final extractedMedia = <String, String>{};
-      var extractedCount = 0;
-      for (final entry in archive) {
-        if (!entry.isFile || entry.isSymbolicLink) continue;
-        final archivePath = entry.name.replaceAll('\\', '/');
-        final segments = archivePath.split('/');
-        if (segments.length < 2 ||
-            segments.first != 'belege' ||
-            segments.any(
-              (segment) => segment.isEmpty || segment == '.' || segment == '..',
-            )) {
-          continue;
-        }
-        final extension = path.extension(segments.last).toLowerCase();
-        if (!const {'.jpg', '.jpeg', '.png', '.pdf'}.contains(extension))
-          continue;
-        final localFile = File(
-          path.join(
-            receiptsDirectory.path,
-            'receipt_${DateTime.now().microsecondsSinceEpoch}_${++extractedCount}$extension',
-          ),
-        );
-        await localFile.writeAsBytes(entry.content, flush: true);
-        extractedMedia[archivePath] = localFile.path;
-      }
-
-      String resolveMediaPath(String imagePath) {
-        final normalizedPath = imagePath.replaceAll('\\', '/');
-        final segments = normalizedPath.split('/');
-        if (segments.length < 2 ||
-            segments.first != 'belege' ||
-            segments.any(
-              (segment) => segment.isEmpty || segment == '.' || segment == '..',
-            )) {
-          return '';
-        }
-        return extractedMedia[normalizedPath] ?? '';
-      }
-
-      final warranties = _parseWarrantyCsv(
-        csvFile.content,
-        resolveImagePath: resolveMediaPath,
-      );
-      await DatabaseHelper.instance.importWarranties(warranties);
-      if (!mounted) return;
-      await widget.onDataImported?.call();
-      _showMessage(
-        '${warranties.length} Garantien und $extractedCount Belege wurden wiederhergestellt.',
-      );
+      await _restoreBackupBytes(zipBytes);
     } on FormatException {
       _showMessage(
         'Das ZIP-Backup ist ungültig oder enthält keine gültige CSV.',
@@ -340,6 +300,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _restoreBackupBytes(List<int> zipBytes) async {
+    final archive = ZipDecoder().decodeBytes(zipBytes, verify: true);
+    ArchiveFile? csvFile;
+    for (final entry in archive) {
+      final entryName = entry.name.replaceAll('\\', '/');
+      if (entryName == 'garantien.csv' && entry.isFile) {
+        csvFile = entry;
+        break;
+      }
+    }
+    if (csvFile == null) {
+      throw const FormatException('Im ZIP-Archiv fehlt garantien.csv.');
+    }
+
+    final documents = await getApplicationDocumentsDirectory();
+    final receiptsDirectory = Directory(path.join(documents.path, 'receipts'));
+    await receiptsDirectory.create(recursive: true);
+    final extractedMedia = <String, String>{};
+    var extractedCount = 0;
+    for (final entry in archive) {
+      if (!entry.isFile || entry.isSymbolicLink) continue;
+      final archivePath = entry.name.replaceAll('\\', '/');
+      final segments = archivePath.split('/');
+      if (segments.length < 2 ||
+          segments.first != 'belege' ||
+          segments.any(
+            (segment) => segment.isEmpty || segment == '.' || segment == '..',
+          )) {
+        continue;
+      }
+      final extension = path.extension(segments.last).toLowerCase();
+      if (!const {'.jpg', '.jpeg', '.png', '.pdf'}.contains(extension)) {
+        continue;
+      }
+      final localFile = File(
+        path.join(
+          receiptsDirectory.path,
+          'receipt_${DateTime.now().microsecondsSinceEpoch}_${++extractedCount}$extension',
+        ),
+      );
+      await localFile.writeAsBytes(entry.content, flush: true);
+      extractedMedia[archivePath] = localFile.path;
+    }
+
+    String resolveMediaPath(String imagePath) {
+      final normalizedPath = imagePath.replaceAll('\\', '/');
+      final segments = normalizedPath.split('/');
+      if (segments.length < 2 ||
+          segments.first != 'belege' ||
+          segments.any(
+            (segment) => segment.isEmpty || segment == '.' || segment == '..',
+          )) {
+        return '';
+      }
+      return extractedMedia[normalizedPath] ?? '';
+    }
+
+    final warranties = _parseWarrantyCsv(
+      csvFile.content,
+      resolveImagePath: resolveMediaPath,
+    );
+    await DatabaseHelper.instance.importWarranties(warranties);
+    if (!mounted) return;
+    await widget.onDataImported?.call();
+    _showMessage(
+      '${warranties.length} Garantien und $extractedCount Belege wurden wiederhergestellt.',
+    );
   }
 
   Future<void> _createInsuranceReport() async {
@@ -495,8 +524,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _showMessage('$feature wird in einem späteren Update verfügbar sein.');
   }
 
+  Future<void> _setDriveSync(bool enabled) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final account = GoogleDriveBackupService.instance;
+      if (enabled) {
+        _driveAccount = await account.signIn();
+      } else {
+        await account.signOut();
+        _driveAccount = null;
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      _showMessage(
+        'Google-Anmeldung fehlgeschlagen. Bitte OAuth-Konfiguration und Drive API prüfen.',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _uploadDriveBackup() async {
+    if (_busy || _driveAccount == null) return;
+    setState(() => _busy = true);
+    try {
+      final backup = await _createFullBackupFile();
+      await GoogleDriveBackupService.instance.uploadBackup(backup.file.path);
+      _showMessage(
+        'Backup mit ${backup.warrantyCount} Garantien in Google Drive gespeichert.',
+      );
+    } catch (_) {
+      _showMessage(
+        'Das Backup konnte nicht in Google Drive hochgeladen werden.',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _restoreDriveBackup() async {
+    if (_busy || _driveAccount == null) return;
+    setState(() => _busy = true);
+    try {
+      final bytes = await GoogleDriveBackupService.instance
+          .downloadLatestBackup();
+      if (bytes == null) {
+        _showMessage(
+          'In Google Drive wurde noch kein BonKeepr-Backup gefunden.',
+        );
+        return;
+      }
+      await _restoreBackupBytes(bytes);
+    } on FormatException {
+      _showMessage('Das Google-Drive-Backup ist ungültig oder unvollständig.');
+    } catch (_) {
+      _showMessage(
+        'Das Backup konnte nicht aus Google Drive wiederhergestellt werden.',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _checkNotificationPermission() async {
+    try {
+      final enabled = await NotificationService.notificationsEnabled();
+      if (mounted) setState(() => _notificationsEnabled = enabled);
+    } catch (_) {}
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    try {
+      final enabled = await NotificationService.requestPermission();
+      if (!mounted) return;
+      setState(() => _notificationsEnabled = enabled);
+      _showMessage(
+        enabled
+            ? 'Benachrichtigungen sind aktiviert.'
+            : 'Benachrichtigungen sind nicht erlaubt. Bitte prüfe die Geräteeinstellungen.',
+      );
+    } catch (_) {
+      _showMessage(
+        'Benachrichtigungsberechtigungen konnten nicht geprüft werden.',
+      );
+    }
+  }
+
+  Future<void> _sendTestNotification() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final scheduled = await NotificationService.sendTestNotification();
+      _showMessage(
+        scheduled
+            ? 'Test-Benachrichtigung wird in 5 Sekunden gesendet.'
+            : 'Benachrichtigung nicht möglich. Bitte erlaube Benachrichtigungen in den Einstellungen.',
+      );
+      await _checkNotificationPermission();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final driveSubtitle = _driveStatusLoading
+        ? 'Anmeldestatus wird geprüft …'
+        : _driveAccount?.email ?? 'Nicht angemeldet';
+    final notificationSubtitle = _notificationsEnabled == null
+        ? 'Status prüfen oder Berechtigung erteilen'
+        : _notificationsEnabled!
+        ? 'Berechtigung erteilt'
+        : 'Nicht erlaubt · antippen zum Aktivieren';
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -578,19 +718,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: 'CLOUD BACKUP',
             children: [
               SwitchListTile.adaptive(
-                value: false,
-                onChanged: null,
+                value: _driveAccount != null,
+                onChanged: _driveStatusLoading || _busy ? null : _setDriveSync,
                 secondary: const _SettingsIcon(icon: Icons.cloud_outlined),
                 title: const Text(
                   'Google Drive Sync',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
-                subtitle: Text(
-                  'Nicht angemeldet · Vorbereitung',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
-                ),
+                subtitle: Text(driveSubtitle),
                 activeThumbColor: const Color(0xFF10B981),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              _SettingsTile(
+                icon: Icons.cloud_upload_outlined,
+                title: 'Backup jetzt hochladen',
+                subtitle: _driveAccount == null
+                    ? 'Zuerst Google Drive verbinden'
+                    : 'Aktuelles Backup im privaten AppData-Ordner speichern',
+                onTap: _busy || _driveAccount == null
+                    ? null
+                    : _uploadDriveBackup,
+              ),
+              _SettingsTile(
+                icon: Icons.cloud_download_outlined,
+                title: 'Backup aus Google Drive wiederherstellen',
+                subtitle: _driveAccount == null
+                    ? 'Zuerst Google Drive verbinden'
+                    : 'Letztes hochgeladenes Backup importieren',
+                onTap: _busy || _driveAccount == null
+                    ? null
+                    : _restoreDriveBackup,
+                showDivider: false,
               ),
             ],
           ),
@@ -598,6 +756,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _SettingsSection(
             title: 'ALLGEMEIN & APP-INFO',
             children: [
+              _SettingsTile(
+                icon: Icons.notifications_active_outlined,
+                title: 'Benachrichtigungen',
+                subtitle: notificationSubtitle,
+                onTap: _requestNotificationPermission,
+              ),
+              _SettingsTile(
+                icon: Icons.notification_add_outlined,
+                title: 'Test-Benachrichtigung senden',
+                subtitle: 'Lokale Benachrichtigung in 5 Sekunden auslösen',
+                onTap: _busy ? null : _sendTestNotification,
+              ),
               const _SettingsTile(
                 icon: Icons.info_outline_rounded,
                 title: 'Über BonKeepr',
