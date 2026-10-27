@@ -3757,6 +3757,22 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
       _WarrantyDurationChoice(label: '48 Monate', months: 48),
       _WarrantyDurationChoice(label: '60 Monate', months: 60),
     ];
+    final selectedDuration = durationChoices.firstWhere(
+      _durationMatches,
+      orElse: () => _WarrantyDurationChoice(
+        label: _warrantyDays == null
+            ? '$_warrantyMonths Monate'
+            : _warrantyMonths == 0
+            ? '$_warrantyDays Tage'
+            : '$_warrantyMonths Monate + $_warrantyDays Tage',
+        months: _warrantyMonths,
+        days: _warrantyDays,
+      ),
+    );
+    final durationDropdownChoices = [
+      ...durationChoices,
+      if (!durationChoices.any(_durationMatches)) selectedDuration,
+    ];
     final isEditing = widget.warranty != null;
     final previewPath = _activeReceiptPreviewPath ?? _scanResult.imagePath;
     return Stack(
@@ -4240,24 +4256,34 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                             ),
                           ),
                           const SizedBox(height: 22),
-                          const _WizardFieldLabel('Garantie-Laufzeit'),
-                          const SizedBox(height: 10),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
+                          Material(
+                            type: MaterialType.transparency,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                for (final choice in durationChoices.take(
-                                  6,
-                                )) ...[
-                                  _WarrantyDurationPill(
-                                    label: choice.label,
-                                    selected: _durationMatches(choice),
-                                    onTap: () =>
-                                        setState(() => _selectDuration(choice)),
+                                const _WizardFieldLabel('Garantie-Laufzeit'),
+                                const SizedBox(height: 10),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      for (final choice in durationChoices.take(
+                                        6,
+                                      )) ...[
+                                        _WarrantyDurationPill(
+                                          label: choice.label,
+                                          selected: _durationMatches(choice),
+                                          onTap: () => setState(
+                                            () => _selectDuration(choice),
+                                          ),
+                                        ),
+                                        if (choice !=
+                                            durationChoices.take(6).last)
+                                          const SizedBox(width: 10),
+                                      ],
+                                    ],
                                   ),
-                                  if (choice != durationChoices.take(6).last)
-                                    const SizedBox(width: 10),
-                                ],
+                                ),
                               ],
                             ),
                           ),
@@ -4280,24 +4306,35 @@ class _WarrantyFormPageState extends State<WarrantyFormPage> {
                                 setState(() => _category = value ?? _category),
                           ),
                           const SizedBox(height: 16),
-                          const _WizardFieldLabel('Weitere Laufzeit'),
-                          DropdownButtonFormField<_WarrantyDurationChoice>(
-                            value: durationChoices.firstWhere(_durationMatches),
-                            decoration: _wizardInputDecoration(
-                              hintText: 'Laufzeit auswählen',
-                            ),
-                            items: durationChoices
-                                .map(
-                                  (choice) => DropdownMenuItem(
-                                    value: choice,
-                                    child: Text(choice.label),
+                          Material(
+                            type: MaterialType.transparency,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const _WizardFieldLabel('Weitere Laufzeit'),
+                                DropdownButtonFormField<
+                                  _WarrantyDurationChoice
+                                >(
+                                  value: selectedDuration,
+                                  decoration: _wizardInputDecoration(
+                                    hintText: 'Laufzeit auswählen',
                                   ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value != null)
-                                setState(() => _selectDuration(value));
-                            },
+                                  items: durationDropdownChoices
+                                      .map(
+                                        (choice) => DropdownMenuItem(
+                                          value: choice,
+                                          child: Text(choice.label),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() => _selectDuration(value));
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 16),
                           const _WizardFieldLabel('Erinnerung planen'),
@@ -4692,9 +4729,6 @@ class _WarrantyDurationPill extends StatelessWidget {
         color: selected
             ? GarantieHeldApp.emerald
             : GarantieHeldApp.surfaceFor(context),
-        borderRadius: ThemeController.instance.isRetroMode
-            ? BorderRadius.zero
-            : BorderRadius.circular(24),
         shape: RoundedRectangleBorder(
           borderRadius: ThemeController.instance.isRetroMode
               ? BorderRadius.zero
