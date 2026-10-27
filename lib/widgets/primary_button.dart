@@ -63,6 +63,7 @@ class PrimaryButton extends StatelessWidget {
                   ? const BorderSide(color: Colors.black, width: 3)
                   : BorderSide.none,
             ),
+            textStyle: const TextStyle(inherit: false),
             elevation: 0,
           ),
           child: Row(
@@ -83,8 +84,9 @@ class PrimaryButton extends StatelessWidget {
                         fontSize: retroFontSize,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0,
-                      )
+                      ).copyWith(inherit: false)
                     : const TextStyle(
+                        inherit: false,
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1,

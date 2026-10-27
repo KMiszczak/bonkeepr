@@ -29,7 +29,10 @@ import 'receipt_ocr_parser.dart';
 import 'settings_screen.dart';
 import 'theme_controller.dart';
 import 'warranty_model.dart';
+import 'widgets/garage_empty_state.dart';
 import 'widgets/primary_button.dart';
+import 'widgets/pixel_rocket.dart';
+import 'widgets/pixel_search_icons.dart';
 import 'widgets/retro_icon.dart';
 
 Future<void> main() async {
@@ -39,7 +42,7 @@ Future<void> main() async {
   runApp(const GarantieHeldApp());
 }
 
-class GarantieHeldApp extends StatelessWidget {
+class GarantieHeldApp extends StatefulWidget {
   const GarantieHeldApp({super.key});
 
   static const emerald = Color(0xFF10B981);
@@ -47,6 +50,37 @@ class GarantieHeldApp extends StatelessWidget {
   static const surface = Color(0xFF1E293B);
   static Color surfaceFor(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark ? surface : Colors.white;
+
+  @override
+  State<GarantieHeldApp> createState() => _GarantieHeldAppState();
+}
+
+class _GarantieHeldAppState extends State<GarantieHeldApp> {
+  bool _wasRetroMode = false;
+  bool _showRetroTransition = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _wasRetroMode = ThemeController.instance.isRetroMode;
+    ThemeController.instance.addListener(_handleThemeChange);
+  }
+
+  void _handleThemeChange() {
+    final isRetroMode = ThemeController.instance.isRetroMode;
+    if (isRetroMode && !_wasRetroMode) {
+      setState(() => _showRetroTransition = true);
+    } else if (!isRetroMode && _showRetroTransition) {
+      setState(() => _showRetroTransition = false);
+    }
+    _wasRetroMode = isRetroMode;
+  }
+
+  @override
+  void dispose() {
+    ThemeController.instance.removeListener(_handleThemeChange);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -62,16 +96,18 @@ class GarantieHeldApp extends StatelessWidget {
       ThemeData buildTheme(bool dark) => ThemeData(
         useMaterial3: true,
         brightness: dark ? Brightness.dark : Brightness.light,
-        scaffoldBackgroundColor: dark ? background : const Color(0xFFF1F5F9),
+        scaffoldBackgroundColor: dark
+            ? GarantieHeldApp.background
+            : const Color(0xFFF1F5F9),
         colorScheme: dark
             ? const ColorScheme.dark(
-                primary: emerald,
+                primary: GarantieHeldApp.emerald,
                 secondary: Color(0xFF34D399),
-                surface: surface,
+                surface: GarantieHeldApp.surface,
                 error: Color(0xFFF87171),
               )
             : const ColorScheme.light(
-                primary: emerald,
+                primary: GarantieHeldApp.emerald,
                 secondary: Color(0xFF059669),
                 surface: Colors.white,
                 error: Color(0xFFDC2626),
@@ -218,6 +254,20 @@ class GarantieHeldApp extends StatelessWidget {
       return MaterialApp(
         title: 'GarantieHeld',
         debugShowCheckedModeBanner: false,
+        builder: (context, child) => Stack(
+          fit: StackFit.expand,
+          children: [
+            child ?? const SizedBox.shrink(),
+            if (_showRetroTransition)
+              Positioned.fill(
+                child: _RetroModeTransitionOverlay(
+                  onComplete: () {
+                    if (mounted) setState(() => _showRetroTransition = false);
+                  },
+                ),
+              ),
+          ],
+        ),
         theme: isRetroMode
             ? retroTheme
             : lightTheme.copyWith(
@@ -232,7 +282,7 @@ class GarantieHeldApp extends StatelessWidget {
             ? retroTheme
             : darkTheme.copyWith(
                 appBarTheme: const AppBarTheme(
-                  backgroundColor: background,
+                  backgroundColor: GarantieHeldApp.background,
                   foregroundColor: Colors.white,
                   elevation: 0,
                 ),
@@ -244,6 +294,303 @@ class GarantieHeldApp extends StatelessWidget {
       );
     },
   );
+}
+
+class _RetroModeTransitionOverlay extends StatefulWidget {
+  const _RetroModeTransitionOverlay({required this.onComplete});
+
+  final VoidCallback onComplete;
+
+  @override
+  State<_RetroModeTransitionOverlay> createState() =>
+      _RetroModeTransitionOverlayState();
+}
+
+class _RetroModeTransitionOverlayState
+    extends State<_RetroModeTransitionOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _readyScale;
+  late final Animation<double> _bossScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 4))
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed) widget.onComplete();
+          });
+    _readyScale = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.4, 0.51, curve: Curves.bounceOut),
+    );
+    _bossScale = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.625, 0.72, curve: Curves.bounceOut),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AbsorbPointer(
+    absorbing: true,
+    child: IgnorePointer(
+      ignoring: true,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final progress = _controller.value;
+          final loading = ((progress - 0.25) / 0.375).clamp(0.0, 1.0);
+          final coinProgress = (progress - 0.25) / 0.15;
+          final showCoin =
+              progress >= 0.25 &&
+              progress < 0.4 &&
+              math.sin(coinProgress * math.pi * 4) > 0;
+          final showReady = progress >= 0.4 && progress < 0.625;
+          final showBoss = progress >= 0.625 && progress < 0.825;
+          final bossPhase = ((progress - 0.625) / 0.2).clamp(0.0, 1.0);
+          final shake = showBoss
+              ? (1 - bossPhase) * 8 * math.sin(bossPhase * math.pi * 18)
+              : 0.0;
+          final flash = _flash(progress);
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomPaint(painter: _PixelCurtainPainter(progress)),
+              if (flash != null)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: flash.color.withValues(
+                      alpha: _flashOpacity(progress, flash.start, flash.end),
+                    ),
+                  ),
+                ),
+              if (showCoin || showReady)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showCoin)
+                          Text(
+                            'INSERT COIN',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.pressStart2p(
+                              color: const Color(0xFFFFD700),
+                              fontSize: 15,
+                              shadows: const [
+                                Shadow(color: Colors.orange, blurRadius: 12),
+                                Shadow(
+                                  color: Colors.black,
+                                  offset: Offset(3, 3),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Transform.scale(
+                            scale: 0.72 + _readyScale.value * 0.28,
+                            child: Text(
+                              'PLAYER 1: READY!',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.pressStart2p(
+                                color: const Color(0xFF00FF66),
+                                fontSize: 13,
+                                height: 1.7,
+                                shadows: const [
+                                  Shadow(
+                                    color: Colors.black,
+                                    offset: Offset(3, 3),
+                                  ),
+                                  Shadow(
+                                    color: Color(0xFF00FF66),
+                                    blurRadius: 14,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 24),
+                        _PixelLoadingBar(progress: loading),
+                      ],
+                    ),
+                  ),
+                ),
+              if (showBoss)
+                Center(
+                  child: Transform.translate(
+                    offset: Offset(shake, -shake * 0.65),
+                    child: Transform.scale(
+                      scale: 0.62 + _bossScale.value * 0.38,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: RichText(
+                          textAlign: TextAlign.center,
+                          text: TextSpan(
+                            style: GoogleFonts.pressStart2p(
+                              fontSize: 13,
+                              height: 1.8,
+                              shadows: const [
+                                Shadow(
+                                  color: Colors.black,
+                                  offset: Offset(3, 3),
+                                ),
+                                Shadow(
+                                  color: Color(0xFFFF007F),
+                                  blurRadius: 14,
+                                ),
+                                Shadow(
+                                  color: Color(0xFF00E5FF),
+                                  blurRadius: 24,
+                                ),
+                              ],
+                            ),
+                            children: const [
+                              TextSpan(
+                                text: '8-BIT MODE\n',
+                                style: TextStyle(color: Color(0xFFFF007F)),
+                              ),
+                              TextSpan(
+                                text: 'ACTIVATED!',
+                                style: TextStyle(color: Color(0xFF00E5FF)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    ),
+  );
+
+  ({double start, double end, Color color})? _flash(double progress) {
+    if (progress >= 0.012 && progress <= 0.05) {
+      return (start: 0.012, end: 0.05, color: Colors.white);
+    }
+    if (progress >= 0.088 && progress <= 0.115) {
+      return (start: 0.088, end: 0.115, color: Colors.white);
+    }
+    if (progress >= 0.19 && progress <= 0.22) {
+      return (start: 0.19, end: 0.22, color: const Color(0xFF00E5FF));
+    }
+    return null;
+  }
+
+  double _flashOpacity(double progress, double start, double end) {
+    final phase = ((progress - start) / (end - start)).clamp(0.0, 1.0);
+    return math.sin(math.pi * phase) * 0.92;
+  }
+}
+
+class _PixelLoadingBar extends StatelessWidget {
+  const _PixelLoadingBar({required this.progress});
+
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = (MediaQuery.sizeOf(context).width - 72)
+        .clamp(180.0, 320.0)
+        .toDouble();
+
+    return Container(
+      width: width,
+      height: 25,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF121212),
+        border: Border.all(color: Colors.black, width: 3),
+      ),
+      child: Row(
+        children: List.generate(12, (index) {
+          final fill = (progress * 12 - index).clamp(0.0, 1.0);
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: index == 11 ? 0 : 2),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const ColoredBox(color: Color(0xFF302A38)),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: fill,
+                      child: const ColoredBox(color: Color(0xFF00FF66)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _PixelCurtainPainter extends CustomPainter {
+  const _PixelCurtainPainter(this.progress);
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty || progress >= 1) return;
+
+    var coverage = 1.0;
+    if (progress < 0.25) {
+      coverage = Curves.easeInOutExpo.transform(progress / 0.25);
+    } else if (progress >= 0.825) {
+      final dissolve = ((progress - 0.825) / 0.175).clamp(0.0, 1.0);
+      coverage = 1 - Curves.easeInOutExpo.transform(dissolve);
+    }
+
+    final paint = Paint()..color = const Color(0xFF050505);
+    const pixelWidth = 18.0;
+    final columns = (size.width / pixelWidth).ceil();
+    for (var column = 0; column < columns; column++) {
+      final x = column * pixelWidth;
+      var columnCoverage = coverage;
+      if (progress >= 0.825) {
+        final dissolve = ((progress - 0.825) / 0.175).clamp(0.0, 1.0);
+        final stagger = ((column * 7) % columns) / columns * 0.28;
+        final localDissolve = ((dissolve - stagger) / (1 - stagger)).clamp(
+          0.0,
+          1.0,
+        );
+        columnCoverage = 1 - Curves.easeInOutExpo.transform(localDissolve);
+      }
+      final jaggedness =
+          (math.sin(column * 12.9898) * 0.5 + 0.5) * 22 * (1 - columnCoverage);
+      final edge = (size.height * 0.5 * columnCoverage + jaggedness).clamp(
+        0.0,
+        size.height * 0.5,
+      );
+      canvas.drawRect(Rect.fromLTRB(x, 0, x + pixelWidth + 1, edge), paint);
+      canvas.drawRect(
+        Rect.fromLTRB(x, size.height - edge, x + pixelWidth + 1, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PixelCurtainPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 Future<void> _shareWarrantyData(BuildContext context, Warranty warranty) async {
@@ -551,6 +898,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Set<String> _hiddenWarrantyIds = {};
   Timer? _logoTapResetTimer;
   int _logoTapCount = 0;
+  bool _isAddingWarranty = false;
   String _searchQuery = '';
   _WarrantySort _sort = _WarrantySort.expiration;
 
@@ -571,16 +919,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _toggleRetroMode(bool enabled) async {
     await ThemeController.instance.setRetroMode(enabled);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            enabled ? '8-Bit Modus aktiviert! 🎮' : 'Normaler Modus aktiviert',
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    if (!enabled) return;
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Retro-Modus aktiviert! 8-Bit 🎮'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   void _sortWarranties(List<Warranty> items) {
@@ -692,28 +1039,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _addWarranty() async {
-    final scan = await Navigator.of(context).push<ReceiptOcrResult>(
-      MaterialPageRoute(builder: (_) => const ReceiptScannerScreen()),
-    );
-    if (!mounted || scan == null) return;
-    final warranty = await Navigator.of(context).push<Warranty>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => WarrantyFormPage(scanResult: scan),
-      ),
-    );
-    if (warranty == null || !mounted) return;
-    await DatabaseHelper.instance.insertWarranty(warranty);
-    final scheduled = await NotificationService.scheduleWarrantyReminder(
-      warranty,
-    );
-    if (!mounted) return;
-    await _refresh();
-    if (!mounted) return;
-    if (!scheduled && warranty.reminderDaysBefore >= 0) {
-      _showNotificationPermissionHint();
+    if (_isAddingWarranty) return;
+    _isAddingWarranty = true;
+    try {
+      final scan = await Navigator.of(context).push<ReceiptOcrResult>(
+        MaterialPageRoute(builder: (_) => const ReceiptScannerScreen()),
+      );
+      if (!mounted || scan == null) return;
+      final warranty = await Navigator.of(context).push<Warranty>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => WarrantyFormPage(scanResult: scan),
+        ),
+      );
+      if (warranty == null || !mounted) return;
+      await DatabaseHelper.instance.insertWarranty(warranty);
+      final scheduled = await NotificationService.scheduleWarrantyReminder(
+        warranty,
+      );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      if (!scheduled && warranty.reminderDaysBefore >= 0) {
+        _showNotificationPermissionHint();
+      }
+      await _showSuccessOverlay();
+    } finally {
+      _isAddingWarranty = false;
     }
-    await _showSuccessOverlay();
   }
 
   Future<void> _openWarrantyDetails(Warranty warranty) async {
@@ -1034,44 +1387,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           onChanged: (value) =>
                               setState(() => _searchQuery = value),
                           textInputAction: TextInputAction.search,
+                          style: ThemeController.instance.isRetroMode
+                              ? GoogleFonts.vt323(
+                                  fontSize: 20,
+                                  color: Colors.black,
+                                )
+                              : null,
                           decoration: InputDecoration(
                             filled: true,
                             hintText: 'Garantie oder Händler suchen...',
                             hintStyle: ThemeController.instance.isRetroMode
-                                ? const TextStyle(color: Color(0xFF00E5FF))
+                                ? GoogleFonts.vt323(
+                                    fontSize: 20,
+                                    color: Colors.black54,
+                                  )
                                 : null,
                             prefixIcon: ThemeController.instance.isRetroMode
-                                ? const Center(
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: RetroIcon(
-                                        Icons.search_rounded,
-                                        size: 20,
-                                        color: Color(0xFF00E5FF),
-                                      ),
-                                    ),
-                                  )
+                                ? null
                                 : const RetroIcon(Icons.search_rounded),
-                            suffixIcon:
-                                ValueListenableBuilder<TextEditingValue>(
-                                  valueListenable: _searchController,
-                                  builder: (context, value, _) =>
-                                      value.text.isEmpty
-                                      ? const SizedBox.shrink()
-                                      : IconButton(
-                                          tooltip: 'Suche leeren',
-                                          onPressed: () {
-                                            _searchController.clear();
-                                            setState(() => _searchQuery = '');
-                                          },
-                                          icon: const RetroIcon(
-                                            Icons.clear_rounded,
-                                          ),
-                                        ),
-                                ),
+                            suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                              valueListenable: _searchController,
+                              builder: (context, value, _) => value.text.isEmpty
+                                  ? ThemeController.instance.isRetroMode
+                                        ? const Icon(
+                                            Icons.search,
+                                            color: Colors.black,
+                                            size: 20,
+                                          )
+                                        : const SizedBox.shrink()
+                                  : IconButton(
+                                      tooltip: 'Suche leeren',
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                      style:
+                                          ThemeController.instance.isRetroMode
+                                          ? IconButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              foregroundColor: const Color(
+                                                0xFFFF1744,
+                                              ),
+                                              padding: EdgeInsets.zero,
+                                              side: BorderSide.none,
+                                              shape:
+                                                  const RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.zero,
+                                                    side: BorderSide.none,
+                                                  ),
+                                            )
+                                          : null,
+                                      icon: ThemeController.instance.isRetroMode
+                                          ? const PixelClearIcon(size: 20)
+                                          : const RetroIcon(
+                                              Icons.clear_rounded,
+                                            ),
+                                    ),
+                            ),
                             fillColor: ThemeController.instance.isRetroMode
-                                ? const Color(0xFF121212)
+                                ? Colors.white
                                 : GarantieHeldApp.surfaceFor(context),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -1105,7 +1481,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   : BorderRadius.circular(12),
                               borderSide: BorderSide(
                                 color: ThemeController.instance.isRetroMode
-                                    ? const Color(0xFF00E5FF)
+                                    ? Colors.black
                                     : GarantieHeldApp.emerald,
                                 width: ThemeController.instance.isRetroMode
                                     ? 3
@@ -1114,90 +1490,97 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Deine Garantien (${filteredWarranties.length})',
-                                style: ThemeController.instance.isRetroMode
-                                    ? GoogleFonts.pressStart2p(
-                                        fontSize: 9,
-                                        color: const Color(0xFFFFD700),
-                                      )
-                                    : const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                              ),
-                            ),
-                            InkWell(
-                              onTap: _showSortOptions,
-                              borderRadius: ThemeController.instance.isRetroMode
-                                  ? BorderRadius.zero
-                                  : BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 11,
-                                  vertical: 7,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: ThemeController.instance.isRetroMode
-                                      ? const Color(0xFF1A0933)
-                                      : const Color(0xFF334155),
-                                  borderRadius:
-                                      ThemeController.instance.isRetroMode
-                                      ? BorderRadius.zero
-                                      : BorderRadius.circular(20),
-                                  border: ThemeController.instance.isRetroMode
-                                      ? Border.all(
-                                          color: Colors.black,
-                                          width: 3,
+                        if (warranties.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Deine Garantien (${filteredWarranties.length})',
+                                  style: ThemeController.instance.isRetroMode
+                                      ? GoogleFonts.pressStart2p(
+                                          fontSize: 9,
+                                          color: const Color(0xFFFFD700),
                                         )
-                                      : null,
-                                  boxShadow:
-                                      ThemeController.instance.isRetroMode
-                                      ? const [
-                                          BoxShadow(
-                                            color: Colors.black,
-                                            offset: Offset(4, 4),
-                                            blurRadius: 0,
-                                          ),
-                                        ]
-                                      : null,
+                                      : const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Sortieren',
-                                      style: TextStyle(
+                              ),
+                              InkWell(
+                                onTap: _showSortOptions,
+                                borderRadius:
+                                    ThemeController.instance.isRetroMode
+                                    ? BorderRadius.zero
+                                    : BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 11,
+                                    vertical: 7,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: ThemeController.instance.isRetroMode
+                                        ? const Color(0xFF1A0933)
+                                        : const Color(0xFF334155),
+                                    borderRadius:
+                                        ThemeController.instance.isRetroMode
+                                        ? BorderRadius.zero
+                                        : BorderRadius.circular(20),
+                                    border: ThemeController.instance.isRetroMode
+                                        ? Border.all(
+                                            color: Colors.black,
+                                            width: 3,
+                                          )
+                                        : null,
+                                    boxShadow:
+                                        ThemeController.instance.isRetroMode
+                                        ? const [
+                                            BoxShadow(
+                                              color: Colors.black,
+                                              offset: Offset(4, 4),
+                                              blurRadius: 0,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Sortieren',
+                                        style: TextStyle(
+                                          color:
+                                              ThemeController
+                                                  .instance
+                                                  .isRetroMode
+                                              ? const Color(0xFF00E5FF)
+                                              : const Color(0xFFE2E8F0),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      SizedBox(width: 4),
+                                      RetroIcon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        size: 16,
                                         color:
                                             ThemeController.instance.isRetroMode
                                             ? const Color(0xFF00E5FF)
                                             : const Color(0xFFE2E8F0),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
                                       ),
-                                    ),
-                                    SizedBox(width: 4),
-                                    RetroIcon(
-                                      Icons.keyboard_arrow_down_rounded,
-                                      size: 16,
-                                      color:
-                                          ThemeController.instance.isRetroMode
-                                          ? const Color(0xFF00E5FF)
-                                          : const Color(0xFFE2E8F0),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                        ],
                         if (warranties.isEmpty)
-                          const _EmptyState()
+                          GarageEmptyState(
+                            isRetroMode: ThemeController.instance.isRetroMode,
+                          )
                         else if (filteredWarranties.isEmpty)
                           const _SearchEmptyState()
                         else
@@ -1289,21 +1672,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                child: PrimaryButton(
-                  key: const ValueKey('dashboard-scan-button'),
-                  label: ThemeController.instance.isRetroMode
-                      ? 'PRESS START'
-                      : 'Bon scannen',
-                  icon: ThemeController.instance.isRetroMode
-                      ? Icons.rocket_launch_rounded
-                      : Icons.document_scanner_outlined,
-                  retroLeading: const Icon(
-                    Icons.rocket_launch,
-                    size: 22,
-                    color: Colors.black,
-                  ),
-                  retroFontSize: 9,
-                  onPressed: _addWarranty,
+                child: AnimatedBuilder(
+                  animation: ThemeController.instance,
+                  builder: (context, _) {
+                    final isRetroMode = ThemeController.instance.isRetroMode;
+                    return PrimaryButton(
+                      label: isRetroMode ? 'PRESS START' : 'Bon scannen',
+                      icon: isRetroMode
+                          ? Icons.rocket_launch_rounded
+                          : Icons.document_scanner_outlined,
+                      retroLeading: const PixelRocket(size: 22),
+                      retroFontSize: 9,
+                      onPressed: _addWarranty,
+                    );
+                  },
                 ),
               ),
             ),
@@ -1835,7 +2217,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
           IconButton(
             tooltip: 'Beleg teilen',
             onPressed: _shareWarranty,
-            icon: const RetroIcon(Icons.ios_share),
+            icon: ThemeController.instance.isRetroMode
+                ? const Icon(Icons.share, color: Color(0xFF00FF66))
+                : const RetroIcon(Icons.ios_share),
             color: const Color(0xFF10B981),
           ),
         ],
@@ -1923,7 +2307,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                       child: IconButton(
                         tooltip: 'Kassenbon auf Gerät speichern',
                         onPressed: _busy ? null : _exportReceipt,
-                        icon: const RetroIcon(Icons.download_rounded),
+                        icon: ThemeController.instance.isRetroMode
+                            ? const Icon(Icons.download, color: Colors.white)
+                            : const RetroIcon(Icons.download_rounded),
                         color: Colors.white,
                         iconSize: 24,
                         style: IconButton.styleFrom(
@@ -2040,7 +2426,9 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
               trailing: IconButton(
                 tooltip: 'Adresse in Google Maps öffnen',
                 onPressed: () => _openStoreLocation(warranty.storeAddress),
-                icon: const RetroIcon(Icons.map_outlined),
+                icon: ThemeController.instance.isRetroMode
+                    ? const Icon(Icons.map, color: Color(0xFF00FF66))
+                    : const RetroIcon(Icons.map_outlined),
                 color: GarantieHeldApp.emerald,
               ),
             ),
@@ -2078,6 +2466,11 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                 child: PrimaryButton(
                   label: 'Löschen',
                   icon: Icons.delete_outline_rounded,
+                  retroLeading: const Icon(
+                    Icons.delete,
+                    color: Colors.black,
+                    size: 20,
+                  ),
                   tone: PrimaryButtonTone.destructive,
                   onPressed: _busy ? null : _deleteWarranty,
                 ),
@@ -2087,6 +2480,11 @@ class _WarrantyDetailPageState extends State<WarrantyDetailPage> {
                 child: PrimaryButton(
                   label: 'Bearbeiten',
                   icon: Icons.edit_rounded,
+                  retroLeading: const Icon(
+                    Icons.edit,
+                    color: Colors.black,
+                    size: 20,
+                  ),
                   onPressed: _busy ? null : _editWarranty,
                 ),
               ),
@@ -2769,52 +3167,6 @@ class _CardQuickAction extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 34),
-      decoration: BoxDecoration(
-        color: GarantieHeldApp.surfaceFor(context),
-        borderRadius: ThemeController.instance.isRetroMode
-            ? BorderRadius.zero
-            : BorderRadius.circular(22),
-        border: ThemeController.instance.isRetroMode
-            ? Border.all(color: Colors.black, width: 3)
-            : null,
-      ),
-      child: Column(
-        children: [
-          RetroIcon(
-            Icons.receipt_long_rounded,
-            size: 42,
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.55),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Noch keine Garantien',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Scanne deinen ersten Kassenbon und behalte deine Käufe im Blick.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.58),
-            ),
-          ),
-        ],
       ),
     );
   }
